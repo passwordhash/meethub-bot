@@ -8,14 +8,8 @@ func entityToModel(entity channelEntity) models.Channel {
 
 func scheduleEntityToModel(entity scheduleEntity) models.Schedule {
 	schedule := models.Schedule{ChannelID: entity.ChannelID, LeadEnabled: entity.LeadEnabled, Override: entity.Override, CheckedAt: entity.CheckedAt}
-	for _, day := range entity.Weekdays {
-		schedule.Weekdays = append(schedule.Weekdays, int(day))
-	}
-	if entity.Hour != nil {
-		schedule.Hour = int(*entity.Hour)
-	}
-	if entity.Minute != nil {
-		schedule.Minute = int(*entity.Minute)
+	if entity.Cron != nil {
+		schedule.Cron = *entity.Cron
 	}
 	return schedule
 }

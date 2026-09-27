@@ -44,7 +44,7 @@ func (u *SchedulerUseCase) Tick(ctx context.Context, now time.Time) error {
 		return fmt.Errorf("get publication schedules: %w", err)
 	}
 	for _, schedule := range schedules {
-		if len(schedule.Weekdays) == 0 {
+		if schedule.Cron == "" {
 			continue
 		}
 		if err := u.processSchedule(ctx, schedule, now); err != nil {

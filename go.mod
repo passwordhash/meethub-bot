@@ -6,6 +6,7 @@ require (
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.2
+	github.com/robfig/cron/v3 v3.0.1
 	go.uber.org/mock v0.6.0
 )
 
@@ -15,8 +16,6 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
-	golang.org/x/mod v0.27.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
-	golang.org/x/tools v0.36.0 // indirect
 )

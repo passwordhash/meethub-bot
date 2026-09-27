@@ -23,9 +23,7 @@ type GetChannelsFilters struct {
 
 type Schedule struct {
 	ChannelID   int64
-	Weekdays    []int
-	Hour        int
-	Minute      int
+	Cron        string
 	LeadEnabled bool
 	Override    *time.Time
 	CheckedAt   *time.Time

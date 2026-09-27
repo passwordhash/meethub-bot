@@ -47,10 +47,10 @@ func TestSchedulerUseCaseTick(t *testing.T) {
 		now      time.Time
 		states   []pubmodels.State
 	}{
-		{name: "several missed and current due already claimed", schedule: channelmodels.Schedule{ChannelID: -1, Weekdays: []int{1}, Hour: 10}, now: monday.Add(20 * time.Second), states: []pubmodels.State{pubmodels.StatePlanned, pubmodels.StatePlanned, pubmodels.StatePlanned, pubmodels.StatePublished}},
-		{name: "override replaces regular occurrence", schedule: channelmodels.Schedule{ChannelID: -1, Weekdays: []int{1}, Hour: 10, Override: &moved}, now: monday.Add(20 * time.Second), states: []pubmodels.State{pubmodels.StatePlanned, pubmodels.StatePlanned, pubmodels.StatePlanned, pubmodels.StatePublished}},
-		{name: "unknown is not retried", schedule: channelmodels.Schedule{ChannelID: -1, Weekdays: []int{1}, Hour: 10}, now: monday.Add(20 * time.Second), states: []pubmodels.State{pubmodels.StatePlanned, pubmodels.StatePlanned, pubmodels.StatePlanned, pubmodels.StateUnknown}},
-		{name: "repeat same minute published", schedule: channelmodels.Schedule{ChannelID: -1, Weekdays: []int{1}, Hour: 10}, now: monday.Add(40 * time.Second), states: []pubmodels.State{pubmodels.StateMissed, pubmodels.StateMissed, pubmodels.StateMissed, pubmodels.StatePublished}},
+		{name: "several missed and current due already claimed", schedule: channelmodels.Schedule{ChannelID: -1, Cron: "0 10 * * 1"}, now: monday.Add(20 * time.Second), states: []pubmodels.State{pubmodels.StatePlanned, pubmodels.StatePlanned, pubmodels.StatePlanned, pubmodels.StatePublished}},
+		{name: "override replaces regular occurrence", schedule: channelmodels.Schedule{ChannelID: -1, Cron: "0 10 * * 1", Override: &moved}, now: monday.Add(20 * time.Second), states: []pubmodels.State{pubmodels.StatePlanned, pubmodels.StatePlanned, pubmodels.StatePlanned, pubmodels.StatePublished}},
+		{name: "unknown is not retried", schedule: channelmodels.Schedule{ChannelID: -1, Cron: "0 10 * * 1"}, now: monday.Add(20 * time.Second), states: []pubmodels.State{pubmodels.StatePlanned, pubmodels.StatePlanned, pubmodels.StatePlanned, pubmodels.StateUnknown}},
+		{name: "repeat same minute published", schedule: channelmodels.Schedule{ChannelID: -1, Cron: "0 10 * * 1"}, now: monday.Add(40 * time.Second), states: []pubmodels.State{pubmodels.StateMissed, pubmodels.StateMissed, pubmodels.StateMissed, pubmodels.StatePublished}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

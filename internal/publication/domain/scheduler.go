@@ -27,27 +27,20 @@ func EvaluateSchedule(schedule channelmodels.Schedule, watermark *time.Time, now
 }
 
 func ScheduleOccurrences(schedule channelmodels.Schedule, watermark *time.Time, now time.Time) []ScheduleOccurrence {
+	cronSchedule, err := channelmodels.ParseCron(schedule.Cron)
+	if err != nil {
+		return nil
+	}
 	localNow := now.In(channelmodels.Moscow)
-	start := localNow
+	start := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, channelmodels.Moscow)
 	if watermark != nil && watermark.Before(now) {
 		start = watermark.In(channelmodels.Moscow)
 	}
 	regular := make([]time.Time, 0)
-	for day := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, channelmodels.Moscow); !day.After(localNow); day = day.AddDate(0, 0, 1) {
-		weekday := int(day.Weekday())
-		if weekday == 0 {
-			weekday = 7
-		}
-		for _, scheduledDay := range schedule.Weekdays {
-			if weekday != scheduledDay {
-				continue
-			}
-			candidate := time.Date(day.Year(), day.Month(), day.Day(), schedule.Hour, schedule.Minute, 0, 0, channelmodels.Moscow)
-			if (watermark == nil || candidate.After(watermark.In(channelmodels.Moscow))) && !candidate.After(localNow) {
-				regular = append(regular, candidate)
-			}
-			break
-		}
+	candidate := cronSchedule.Next(start)
+	for !candidate.IsZero() && !candidate.After(localNow) {
+		regular = append(regular, candidate)
+		candidate = cronSchedule.Next(candidate)
 	}
 	if schedule.Override != nil && (watermark == nil || schedule.Override.After(*watermark)) {
 		if len(regular) > 0 {
