@@ -281,12 +281,16 @@ func (u *ChannelUseCase) handle(ctx context.Context, update models.Update) error
 		return u.handleCallback(ctx, update)
 	}
 	text := strings.TrimSpace(update.Text)
-	if channelID, pending := u.pendingCron[update.ChatID]; pending && !strings.HasPrefix(text, "/") {
-		if _, err := models.ParseCron(text); err != nil {
-			return u.telegram.Send(ctx, update.ChatID, "Некорректный cron. Отправьте пять полей, например: 30 9 * * 1,3,5")
+	if channelID, pending := u.pendingCron[update.ChatID]; pending {
+		if strings.HasPrefix(text, "/") {
+			delete(u.pendingCron, update.ChatID)
+		} else {
+			if _, err := models.ParseCron(text); err != nil {
+				return u.telegram.Send(ctx, update.ChatID, "Некорректный cron. Отправьте пять полей, например: 30 9 * * 1,3,5")
+			}
+			delete(u.pendingCron, update.ChatID)
+			return u.setDailySchedule(ctx, update.ChatID, fmt.Sprintf("%d %q", channelID, text))
 		}
-		delete(u.pendingCron, update.ChatID)
-		return u.setDailySchedule(ctx, update.ChatID, fmt.Sprintf("%d %q", channelID, text))
 	}
 	if text == "/start" {
 		delete(u.pendingCron, update.ChatID)

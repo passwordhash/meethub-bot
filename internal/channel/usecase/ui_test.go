@@ -34,6 +34,20 @@ func TestUISetScheduleFromButtonAndMessage(t *testing.T) {
 	}
 }
 
+func TestUICommandCancelsPendingCronInput(t *testing.T) {
+	uc := NewChannelUseCase(1, nil, nil, nil)
+	uc.pendingCron[1] = -100123
+	if err := uc.handle(context.Background(), models.Update{Kind: "message", ChatID: 1, Text: "/unknown"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, pending := uc.pendingCron[1]; pending {
+		t.Fatal("pending cron input was not cancelled by a command")
+	}
+	if err := uc.handle(context.Background(), models.Update{Kind: "message", ChatID: 1, Text: "*/5 * * * *"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestUILeadToggle(t *testing.T) {
 	tests := []struct {
 		name    string
