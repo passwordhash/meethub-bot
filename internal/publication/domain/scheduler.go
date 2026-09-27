@@ -7,6 +7,8 @@ import (
 	channelmodels "github.com/passwordhash/cascade-hub-bot/internal/channel/models"
 )
 
+const maxScheduleOccurrences = 100
+
 type ScheduleOccurrence struct {
 	ScheduledAt time.Time
 	Due         bool
@@ -32,15 +34,19 @@ func ScheduleOccurrences(schedule channelmodels.Schedule, watermark *time.Time, 
 		return nil
 	}
 	localNow := now.In(channelmodels.Moscow)
-	start := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, channelmodels.Moscow)
+	start := localNow
 	if watermark != nil && watermark.Before(now) {
 		start = watermark.In(channelmodels.Moscow)
+	} else if watermark == nil {
+		start = time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, channelmodels.Moscow).Add(-time.Minute)
 	}
-	regular := make([]time.Time, 0)
-	candidate := cronSchedule.Next(start)
-	for !candidate.IsZero() && !candidate.After(localNow) {
+	cutoff := localNow.Add(-maxScheduleOccurrences * time.Minute)
+	if start.Before(cutoff) {
+		start = cutoff
+	}
+	regular := make([]time.Time, 0, maxScheduleOccurrences)
+	for candidate := cronSchedule.Next(start); !candidate.IsZero() && !candidate.After(localNow); candidate = cronSchedule.Next(candidate) {
 		regular = append(regular, candidate)
-		candidate = cronSchedule.Next(candidate)
 	}
 	if schedule.Override != nil && (watermark == nil || schedule.Override.After(*watermark)) {
 		if len(regular) > 0 {

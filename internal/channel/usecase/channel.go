@@ -100,26 +100,48 @@ func (u *ChannelUseCase) scheduleForChannel(ctx context.Context, channelID int64
 	return schedules[0], nil
 }
 
-func (u *ChannelUseCase) setSchedule(ctx context.Context, chatID int64, args []string) error {
-	if len(args) < 2 {
-		return u.telegram.Send(ctx, chatID, "Формат: /daily-schedule <ID канала> <cron: минута час день месяц день-недели> или /daily-schedule <ID канала> lead on|off")
+func (u *ChannelUseCase) setDailySchedule(ctx context.Context, chatID int64, arguments string) error {
+	arguments = strings.TrimSpace(arguments)
+	fields := strings.Fields(arguments)
+	if len(fields) == 3 && fields[1] == "lead" {
+		if fields[2] != "on" && fields[2] != "off" {
+			return u.telegram.Send(ctx, chatID, "Формат: /daily-schedule <ID канала> lead on|off")
+		}
+		channelID, err := strconv.ParseInt(fields[0], 10, 64)
+		if err != nil || models.ValidateChannelID(channelID) != nil {
+			return u.telegram.Send(ctx, chatID, "Проверьте ID канала.")
+		}
+		if _, err := u.scheduleForChannel(ctx, channelID); errors.Is(err, models.ErrInvalidChannelID) {
+			return u.telegram.Send(ctx, chatID, "Канал не подключён.")
+		} else if err != nil {
+			return u.telegram.Send(ctx, chatID, "Не удалось прочитать настройки канала.")
+		}
+		enabled := fields[2] == "on"
+		if err := u.repository.SetLeadEnabled(ctx, channelID, enabled); err != nil {
+			return u.telegram.Send(ctx, chatID, "Не удалось сохранить настройку ведущего.")
+		}
+		if enabled {
+			return u.telegram.Send(ctx, chatID, "Случайное назначение ведущего включено.")
+		}
+		return u.telegram.Send(ctx, chatID, "Упоминание ведущего отключено.")
 	}
-	channelID, err := strconv.ParseInt(args[0], 10, 64)
+	if len(fields) < 2 {
+		return u.telegram.Send(ctx, chatID, "Формат: /daily-schedule <ID канала> \"<cron-выражение>\"; ведущего: /daily-schedule <ID канала> lead on|off")
+	}
+	channelID, err := strconv.ParseInt(fields[0], 10, 64)
 	if err != nil || models.ValidateChannelID(channelID) != nil {
 		return u.telegram.Send(ctx, chatID, "Проверьте ID канала.")
 	}
-	cronExpression := strings.Join(args[1:], " ")
-	_, cronErr := models.ParseCron(cronExpression)
-	if cronErr != nil && len(args) == 3 {
-		weekdays, daysErr := models.ParseWeekdays(args[1])
-		hour, minute, clockErr := models.ParseClock(args[2])
-		if daysErr == nil && clockErr == nil {
-			cronExpression = models.CronFromLegacy(weekdays, hour, minute)
-			_, cronErr = models.ParseCron(cronExpression)
-		}
+	cronExpression := strings.TrimSpace(strings.TrimPrefix(arguments, fields[0]))
+	if len(cronExpression) < 2 || cronExpression[0] != '"' || cronExpression[len(cronExpression)-1] != '"' {
+		return u.telegram.Send(ctx, chatID, "Формат: /daily-schedule <ID канала> \"<cron-выражение>\"")
 	}
-	if cronErr != nil {
-		return u.telegram.Send(ctx, chatID, "Проверьте cron-выражение из пяти полей (минута час день месяц день-недели).")
+	cronExpression = cronExpression[1 : len(cronExpression)-1]
+	if strings.ContainsRune(cronExpression, '"') {
+		return u.telegram.Send(ctx, chatID, "Укажите cron-выражение в двойных кавычках.")
+	}
+	if _, err := models.ParseCron(cronExpression); err != nil {
+		return u.telegram.Send(ctx, chatID, "Проверьте пяти-полевое cron-выражение.")
 	}
 	now := time.Now().In(models.Moscow)
 	current, err := u.scheduleForChannel(ctx, channelID)
@@ -139,32 +161,6 @@ func (u *ChannelUseCase) setSchedule(ctx context.Context, chatID int64, args []s
 		message += " Существовавший перенос сброшен: для нового расписания он не проходит ограничение до второго обычного слота."
 	}
 	return u.telegram.Send(ctx, chatID, message)
-}
-
-func (u *ChannelUseCase) setDailySchedule(ctx context.Context, chatID int64, args []string) error {
-	if len(args) == 3 && args[1] == "lead" {
-		if args[2] != "on" && args[2] != "off" {
-			return u.telegram.Send(ctx, chatID, "Формат: /daily-schedule <ID канала> lead on|off")
-		}
-		channelID, err := strconv.ParseInt(args[0], 10, 64)
-		if err != nil || models.ValidateChannelID(channelID) != nil {
-			return u.telegram.Send(ctx, chatID, "Проверьте ID канала.")
-		}
-		if _, err := u.scheduleForChannel(ctx, channelID); errors.Is(err, models.ErrInvalidChannelID) {
-			return u.telegram.Send(ctx, chatID, "Канал не подключён.")
-		} else if err != nil {
-			return u.telegram.Send(ctx, chatID, "Не удалось прочитать настройки канала.")
-		}
-		enabled := args[2] == "on"
-		if err := u.repository.SetLeadEnabled(ctx, channelID, enabled); err != nil {
-			return u.telegram.Send(ctx, chatID, "Не удалось сохранить настройку ведущего.")
-		}
-		if enabled {
-			return u.telegram.Send(ctx, chatID, "Случайное назначение ведущего включено.")
-		}
-		return u.telegram.Send(ctx, chatID, "Упоминание ведущего отключено.")
-	}
-	return u.setSchedule(ctx, chatID, args)
 }
 
 func (u *ChannelUseCase) move(ctx context.Context, chatID int64, args []string) error {
@@ -199,10 +195,10 @@ func (u *ChannelUseCase) move(ctx context.Context, chatID int64, args []string) 
 func (u *ChannelUseCase) handle(ctx context.Context, update models.Update) error {
 	text := strings.TrimSpace(update.Text)
 	if text == "/start" || text == "/connect" {
-		return u.telegram.Send(ctx, update.ChatID, "Используйте /connect <ID канала> для подключения канала; /daily-schedule <ID> <cron из 5 полей> для расписания, /daily-schedule <ID> lead on|off для ведущего; /move <ID> <YYYY-MM-DD> <HH:MM>.")
+		return u.telegram.Send(ctx, update.ChatID, "Используйте /connect <ID канала>; /daily-schedule <ID> \"<cron-выражение>\"; /daily-schedule <ID> lead on|off; /move <ID> <YYYY-MM-DD> <HH:MM>.")
 	}
 	if strings.HasPrefix(text, "/daily-schedule ") {
-		return u.setDailySchedule(ctx, update.ChatID, strings.Fields(text)[1:])
+		return u.setDailySchedule(ctx, update.ChatID, strings.TrimPrefix(text, "/daily-schedule"))
 	}
 	if strings.HasPrefix(text, "/move ") {
 		return u.move(ctx, update.ChatID, strings.Fields(text)[1:])

@@ -40,26 +40,6 @@ func TestParseScheduleInputs(t *testing.T) {
 			t.Errorf("ParseCron(%q) succeeded", invalid)
 		}
 	}
-	days, err := ParseWeekdays("1,3,7")
-	if err != nil || len(days) != 3 || days[2] != 7 {
-		t.Fatalf("ParseWeekdays returned %v, %v", days, err)
-	}
-	for _, invalid := range []string{"", "0", "8", "1,1", "1,,2"} {
-		if _, err := ParseWeekdays(invalid); err == nil {
-			t.Errorf("ParseWeekdays(%q) succeeded", invalid)
-		}
-	}
-	if hour, minute, err := ParseClock("09:30"); err != nil || hour != 9 || minute != 30 {
-		t.Fatalf("ParseClock returned %d:%d, %v", hour, minute, err)
-	}
-	for _, invalid := range []string{"9:30", "24:00", "12:60"} {
-		if _, _, err := ParseClock(invalid); err == nil {
-			t.Errorf("ParseClock(%q) succeeded", invalid)
-		}
-	}
-	if got := CronFromLegacy([]int{1, 3, 7}, 9, 30); got != "30 9 * * 1,3,0" {
-		t.Errorf("CronFromLegacy = %q", got)
-	}
 }
 
 func TestValidateMove(t *testing.T) {

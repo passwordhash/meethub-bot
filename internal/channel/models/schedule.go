@@ -2,7 +2,6 @@ package models
 
 import (
 	"errors"
-	"strconv"
 	"strings"
 	"time"
 
@@ -27,43 +26,6 @@ func ParseCron(expression string) (*cron.SpecSchedule, error) {
 	}
 	schedule.Location = Moscow
 	return schedule, nil
-}
-
-func ParseWeekdays(value string) ([]int, error) {
-	parts := strings.Split(value, ",")
-	seen := make(map[int]bool, len(parts))
-	weekdays := make([]int, 0, len(parts))
-	for _, part := range parts {
-		day, err := strconv.Atoi(part)
-		if err != nil {
-			return nil, ErrInvalidSchedule
-		}
-		if day < 1 || day > 7 || seen[day] {
-			return nil, ErrInvalidSchedule
-		}
-		seen[day] = true
-		weekdays = append(weekdays, day)
-	}
-	return weekdays, nil
-}
-
-func ParseClock(value string) (int, int, error) {
-	parsed, err := time.Parse("15:04", value)
-	if err != nil || parsed.Format("15:04") != value {
-		return 0, 0, ErrInvalidSchedule
-	}
-	return parsed.Hour(), parsed.Minute(), nil
-}
-
-func CronFromLegacy(weekdays []int, hour, minute int) string {
-	days := make([]string, 0, len(weekdays))
-	for _, day := range weekdays {
-		if day == 7 {
-			day = 0
-		}
-		days = append(days, strconv.Itoa(day))
-	}
-	return strings.Join([]string{strconv.Itoa(minute), strconv.Itoa(hour), "*", "*", strings.Join(days, ",")}, " ")
 }
 
 func NextOccurrence(now time.Time, expression string, override *time.Time) *time.Time {

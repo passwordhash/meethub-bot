@@ -10,12 +10,12 @@ import (
 
 func TestDailyScheduleCron(t *testing.T) {
 	tests := []struct {
-		name string
-		args []string
-		cron string
+		name      string
+		arguments string
+		cron      string
 	}{
-		{name: "five-field cron", args: []string{"-100123", "30", "9", "*", "*", "1,3,5"}, cron: "30 9 * * 1,3,5"},
-		{name: "legacy weekdays and time", args: []string{"-100123", "1,3,5", "09:30"}, cron: "30 9 * * 1,3,5"},
+		{name: "quoted five-field cron", arguments: `-100123 "30 9 * * 1,3,5"`, cron: "30 9 * * 1,3,5"},
+		{name: "quoted monthly cron", arguments: `-100123 "15 10 1 * *"`, cron: "15 10 1 * *"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -27,7 +27,7 @@ func TestDailyScheduleCron(t *testing.T) {
 			repository.EXPECT().SetSchedule(gomock.Any(), models.Schedule{ChannelID: channelID, Cron: tt.cron, LeadEnabled: true}, false).Return(nil)
 			telegram.EXPECT().Send(gomock.Any(), int64(1), gomock.Any()).Return(nil)
 			uc := NewChannelUseCase(1, repository, telegram, nil)
-			if err := uc.setDailySchedule(context.Background(), 1, tt.args); err != nil {
+			if err := uc.setDailySchedule(context.Background(), 1, tt.arguments); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -53,7 +53,7 @@ func TestDailyScheduleLeadToggle(t *testing.T) {
 			repository.EXPECT().SetLeadEnabled(gomock.Any(), channelID, tt.want).Return(nil)
 			telegram.EXPECT().Send(gomock.Any(), int64(1), gomock.Any()).Return(nil)
 			uc := NewChannelUseCase(1, repository, telegram, nil)
-			if err := uc.setDailySchedule(context.Background(), 1, []string{"-100123", "lead", tt.setting}); err != nil {
+			if err := uc.setDailySchedule(context.Background(), 1, "-100123 lead "+tt.setting); err != nil {
 				t.Fatal(err)
 			}
 		})
