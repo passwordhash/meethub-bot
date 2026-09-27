@@ -191,6 +191,20 @@ func (m *MockTelegramClient) EXPECT() *MockTelegramClientMockRecorder {
 	return m.recorder
 }
 
+// AnswerCallback mocks base method.
+func (m *MockTelegramClient) AnswerCallback(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AnswerCallback", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AnswerCallback indicates an expected call of AnswerCallback.
+func (mr *MockTelegramClientMockRecorder) AnswerCallback(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AnswerCallback", reflect.TypeOf((*MockTelegramClient)(nil).AnswerCallback), arg0, arg1, arg2)
+}
+
 // Send mocks base method.
 func (m *MockTelegramClient) Send(arg0 context.Context, arg1 int64, arg2 string) error {
 	m.ctrl.T.Helper()
@@ -203,6 +217,20 @@ func (m *MockTelegramClient) Send(arg0 context.Context, arg1 int64, arg2 string)
 func (mr *MockTelegramClientMockRecorder) Send(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockTelegramClient)(nil).Send), arg0, arg1, arg2)
+}
+
+// SendKeyboard mocks base method.
+func (m *MockTelegramClient) SendKeyboard(arg0 context.Context, arg1 int64, arg2 string, arg3 [][]models.InlineButton) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendKeyboard", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendKeyboard indicates an expected call of SendKeyboard.
+func (mr *MockTelegramClientMockRecorder) SendKeyboard(arg0, arg1, arg2, arg3 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendKeyboard", reflect.TypeOf((*MockTelegramClient)(nil).SendKeyboard), arg0, arg1, arg2, arg3)
 }
 
 // Updates mocks base method.

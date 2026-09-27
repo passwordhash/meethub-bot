@@ -25,4 +25,6 @@ type TelegramClient interface {
 	VerifyChannel(context.Context, int64, int64) (models.Permissions, error)
 	Updates(context.Context, int64) ([]models.Update, error)
 	Send(context.Context, int64, string) error
+	SendKeyboard(context.Context, int64, string, [][]models.InlineButton) error
+	AnswerCallback(context.Context, string, string) error
 }

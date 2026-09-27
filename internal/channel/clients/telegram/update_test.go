@@ -80,6 +80,18 @@ func TestDecodeUpdateMapsBotAPIShapes(t *testing.T) {
 	}
 }
 
+func TestDecodeCallbackQuery(t *testing.T) {
+	var dto Update
+	body := `{"update_id":90,"callback_query":{"id":"query-1","from":{"id":12},"message":{"message_id":91,"chat":{"id":12,"type":"private"}},"data":"ui:schedule"}}`
+	if err := json.Unmarshal([]byte(body), &dto); err != nil {
+		t.Fatal(err)
+	}
+	got := mapUpdate(dto)
+	if got.Kind != "callback_query" || got.CallbackQueryID != "query-1" || got.CallbackData != "ui:schedule" || got.ChatID != 12 || got.ChatType != "private" || got.FromID != 12 {
+		t.Fatalf("mapped callback = %+v", got)
+	}
+}
+
 func TestDecodeUpdateRejectsMalformedJSON(t *testing.T) {
 	var update Update
 	if err := json.Unmarshal([]byte(`{"update_id":"not-an-id","message":{}}`), &update); err == nil {

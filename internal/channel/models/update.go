@@ -1,5 +1,10 @@
 package models
 
+type InlineButton struct {
+	Text         string
+	CallbackData string
+}
+
 type Update struct {
 	ID                 int64
 	Text               string
@@ -19,4 +24,6 @@ type Update struct {
 	Date               int64
 	EditDate           int64
 	Kind               string
+	CallbackQueryID    string
+	CallbackData       string
 }

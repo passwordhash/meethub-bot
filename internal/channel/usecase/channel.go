@@ -14,14 +14,15 @@ import (
 )
 
 type ChannelUseCase struct {
-	ownerID    int64
-	repository ChannelRepository
-	telegram   TelegramClient
-	processor  updateProcessor
+	ownerID     int64
+	repository  ChannelRepository
+	telegram    TelegramClient
+	processor   updateProcessor
+	pendingCron map[int64]int64
 }
 
 func NewChannelUseCase(ownerID int64, repository ChannelRepository, telegram TelegramClient, processor updateProcessor) *ChannelUseCase {
-	return &ChannelUseCase{ownerID: ownerID, repository: repository, telegram: telegram, processor: processor}
+	return &ChannelUseCase{ownerID: ownerID, repository: repository, telegram: telegram, processor: processor, pendingCron: make(map[int64]int64)}
 }
 
 func (u *ChannelUseCase) Run(ctx context.Context) error {
@@ -192,10 +193,107 @@ func (u *ChannelUseCase) move(ctx context.Context, chatID int64, args []string) 
 	return u.telegram.Send(ctx, chatID, "Разовый перенос сохранён. Перенос меняет только ближайший слот; расписание остаётся прежним.")
 }
 
+func (u *ChannelUseCase) sendMenu(ctx context.Context, chatID int64) error {
+	return u.telegram.SendKeyboard(ctx, chatID, "Настройки дейли Cascade:", [][]models.InlineButton{
+		{{Text: "🗓 Расписание", CallbackData: "ui:schedule"}},
+		{{Text: "👤 Случайный ведущий", CallbackData: "ui:lead"}},
+	})
+}
+
+func (u *ChannelUseCase) sendChannelMenu(ctx context.Context, chatID int64, leadMenu bool) error {
+	schedules, err := u.repository.GetSchedules(ctx, models.GetSchedulesFilters{})
+	if err != nil {
+		return u.telegram.Send(ctx, chatID, "Не удалось загрузить каналы.")
+	}
+	if len(schedules) == 0 {
+		return u.telegram.Send(ctx, chatID, "Сначала подключите канал командой /connect <ID канала>.")
+	}
+	keyboard := make([][]models.InlineButton, 0, len(schedules)+1)
+	for _, schedule := range schedules {
+		button := models.InlineButton{Text: strconv.FormatInt(schedule.ChannelID, 10)}
+		if leadMenu {
+			if schedule.LeadEnabled {
+				button.Text += " · ведущий вкл."
+				button.CallbackData = fmt.Sprintf("ui:lead:%d:off", schedule.ChannelID)
+			} else {
+				button.Text += " · ведущий выкл."
+				button.CallbackData = fmt.Sprintf("ui:lead:%d:on", schedule.ChannelID)
+			}
+		} else {
+			button.Text += " · расписание"
+			button.CallbackData = fmt.Sprintf("ui:schedule:%d", schedule.ChannelID)
+		}
+		keyboard = append(keyboard, []models.InlineButton{button})
+	}
+	keyboard = append(keyboard, []models.InlineButton{{Text: "⬅️ Меню", CallbackData: "ui:menu"}})
+	prompt := "Выберите канал для расписания:"
+	if leadMenu {
+		prompt = "Нажмите на канал, чтобы переключить случайного ведущего:"
+	}
+	return u.telegram.SendKeyboard(ctx, chatID, prompt, keyboard)
+}
+
+func (u *ChannelUseCase) handleCallback(ctx context.Context, update models.Update) error {
+	if err := u.telegram.AnswerCallback(ctx, update.CallbackQueryID, ""); err != nil {
+		return err
+	}
+	parts := strings.Split(update.CallbackData, ":")
+	switch {
+	case update.CallbackData == "ui:menu":
+		return u.sendMenu(ctx, update.ChatID)
+	case update.CallbackData == "ui:schedule":
+		return u.sendChannelMenu(ctx, update.ChatID, false)
+	case update.CallbackData == "ui:lead":
+		return u.sendChannelMenu(ctx, update.ChatID, true)
+	case len(parts) == 3 && parts[0] == "ui" && parts[1] == "schedule":
+		channelID, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil || models.ValidateChannelID(channelID) != nil {
+			return u.telegram.Send(ctx, update.ChatID, "Не удалось распознать канал.")
+		}
+		if _, err := u.scheduleForChannel(ctx, channelID); err != nil {
+			return u.telegram.Send(ctx, update.ChatID, "Канал больше не подключён.")
+		}
+		u.pendingCron[update.ChatID] = channelID
+		return u.telegram.SendKeyboard(ctx, update.ChatID, "Отправьте cron-выражение сообщением, например: 30 9 * * 1,3,5", [][]models.InlineButton{{{Text: "Отмена", CallbackData: "ui:cancel"}}})
+	case len(parts) == 4 && parts[0] == "ui" && parts[1] == "lead":
+		channelID, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil || models.ValidateChannelID(channelID) != nil || (parts[3] != "on" && parts[3] != "off") {
+			return u.telegram.Send(ctx, update.ChatID, "Не удалось распознать настройку ведущего.")
+		}
+		if _, err := u.scheduleForChannel(ctx, channelID); err != nil {
+			return u.telegram.Send(ctx, update.ChatID, "Канал больше не подключён.")
+		}
+		enabled := parts[3] == "on"
+		if err := u.repository.SetLeadEnabled(ctx, channelID, enabled); err != nil {
+			return u.telegram.Send(ctx, update.ChatID, "Не удалось сохранить настройку ведущего.")
+		}
+		return u.sendChannelMenu(ctx, update.ChatID, true)
+	case update.CallbackData == "ui:cancel":
+		delete(u.pendingCron, update.ChatID)
+		return u.sendMenu(ctx, update.ChatID)
+	default:
+		return u.telegram.Send(ctx, update.ChatID, "Эта кнопка устарела. Откройте /start.")
+	}
+}
+
 func (u *ChannelUseCase) handle(ctx context.Context, update models.Update) error {
+	if update.Kind == "callback_query" {
+		return u.handleCallback(ctx, update)
+	}
 	text := strings.TrimSpace(update.Text)
-	if text == "/start" || text == "/connect" {
-		return u.telegram.Send(ctx, update.ChatID, "Используйте /connect <ID канала>; /daily-schedule <ID> \"<cron-выражение>\"; /daily-schedule <ID> lead on|off; /move <ID> <YYYY-MM-DD> <HH:MM>.")
+	if channelID, pending := u.pendingCron[update.ChatID]; pending && !strings.HasPrefix(text, "/") {
+		if _, err := models.ParseCron(text); err != nil {
+			return u.telegram.Send(ctx, update.ChatID, "Некорректный cron. Отправьте пять полей, например: 30 9 * * 1,3,5")
+		}
+		delete(u.pendingCron, update.ChatID)
+		return u.setDailySchedule(ctx, update.ChatID, fmt.Sprintf("%d %q", channelID, text))
+	}
+	if text == "/start" {
+		delete(u.pendingCron, update.ChatID)
+		return u.sendMenu(ctx, update.ChatID)
+	}
+	if text == "/connect" {
+		return u.telegram.Send(ctx, update.ChatID, "Для подключения используйте /connect <ID канала>.")
 	}
 	if strings.HasPrefix(text, "/daily-schedule ") {
 		return u.setDailySchedule(ctx, update.ChatID, strings.TrimPrefix(text, "/daily-schedule"))

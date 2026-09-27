@@ -104,6 +104,7 @@ type Update struct {
 	Message       *message
 	EditedMessage *message
 	ChannelPost   *message
+	CallbackQuery *callbackQuery
 }
 
 func (u *Update) UnmarshalJSON(data []byte) error {
@@ -116,11 +117,12 @@ func (u *Update) UnmarshalJSON(data []byte) error {
 	}
 	for _, field := range []struct {
 		key    string
-		target **message
+		target any
 	}{
 		{key: "message", target: &u.Message},
 		{key: "edited_message", target: &u.EditedMessage},
 		{key: "channel_post", target: &u.ChannelPost},
+		{key: "callback_query", target: &u.CallbackQuery},
 	} {
 		if err := unmarshalOptional(fields[field.key], field.target); err != nil {
 			return err
@@ -129,7 +131,26 @@ func (u *Update) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+type callbackQuery struct {
+	ID      string   `json:"id"`
+	From    *user    `json:"from"`
+	Message *message `json:"message"`
+	Data    string   `json:"data"`
+}
+
 func mapUpdate(update Update) models.Update {
+	if update.CallbackQuery != nil {
+		mapped := models.Update{ID: update.ID, Kind: "callback_query", CallbackQueryID: update.CallbackQuery.ID, CallbackData: update.CallbackQuery.Data}
+		if update.CallbackQuery.From != nil {
+			mapped.FromID = update.CallbackQuery.From.ID
+		}
+		if update.CallbackQuery.Message != nil {
+			mapped.ChatID = update.CallbackQuery.Message.Chat.ID
+			mapped.ChatType = update.CallbackQuery.Message.Chat.Type
+			mapped.MessageID = update.CallbackQuery.Message.ID
+		}
+		return mapped
+	}
 	kind, source := "", (*message)(nil)
 	switch {
 	case update.Message != nil:
@@ -355,7 +376,7 @@ func groupPermissions(bot member, group chat) (bool, bool) {
 
 func (c *Client) Updates(ctx context.Context, offset int64) ([]models.Update, error) {
 	var updates []Update
-	if err := c.call(ctx, "getUpdates", map[string]any{"offset": offset, "timeout": 30, "allowed_updates": []string{"message", "edited_message", "channel_post"}}, &updates); err != nil {
+	if err := c.call(ctx, "getUpdates", map[string]any{"offset": offset, "timeout": 30, "allowed_updates": []string{"message", "edited_message", "channel_post", "callback_query"}}, &updates); err != nil {
 		return nil, err
 	}
 	result := make([]models.Update, 0, len(updates))
@@ -367,6 +388,25 @@ func (c *Client) Updates(ctx context.Context, offset int64) ([]models.Update, er
 
 func (c *Client) Send(ctx context.Context, chatID int64, text string) error {
 	return c.call(ctx, "sendMessage", map[string]any{"chat_id": chatID, "text": text}, nil)
+}
+
+func (c *Client) SendKeyboard(ctx context.Context, chatID int64, text string, keyboard [][]models.InlineButton) error {
+	rows := make([][]map[string]string, 0, len(keyboard))
+	for _, row := range keyboard {
+		buttons := make([]map[string]string, 0, len(row))
+		for _, button := range row {
+			buttons = append(buttons, map[string]string{"text": button.Text, "callback_data": button.CallbackData})
+		}
+		rows = append(rows, buttons)
+	}
+	return c.call(ctx, "sendMessage", map[string]any{
+		"chat_id": chatID, "text": text,
+		"reply_markup": map[string]any{"inline_keyboard": rows},
+	}, nil)
+}
+
+func (c *Client) AnswerCallback(ctx context.Context, callbackQueryID, text string) error {
+	return c.call(ctx, "answerCallbackQuery", map[string]any{"callback_query_id": callbackQueryID, "text": text}, nil)
 }
 
 type sentMessage struct {
