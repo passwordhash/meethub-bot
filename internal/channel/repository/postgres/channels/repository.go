@@ -63,6 +63,24 @@ func (r *Repository) SetSchedule(ctx context.Context, schedule models.Schedule, 
 	return nil
 }
 
+func (r *Repository) SetLeadEnabled(ctx context.Context, channelID int64, enabled bool) error {
+	query, args := setLeadEnabledQuery(channelID, enabled)
+	rows, err := r.getter.Get(ctx).Query(ctx, query, args)
+	if err != nil {
+		return fmt.Errorf("set daily lead setting: %w", err)
+	}
+	_, err = pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[struct {
+		ChannelID int64 `db:"channel_id"`
+	}])
+	if errors.Is(err, pgx.ErrNoRows) {
+		return models.ErrInvalidChannelID
+	}
+	if err != nil {
+		return fmt.Errorf("set daily lead setting: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) SetScheduleCheckedAt(ctx context.Context, channelID int64, checkedAt time.Time) error {
 	query, args := setScheduleCheckedAtQuery(channelID, checkedAt)
 	rows, err := r.getter.Get(ctx).Query(ctx, query, args)

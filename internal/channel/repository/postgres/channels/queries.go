@@ -32,7 +32,7 @@ func getChannelsQuery(filters models.GetChannelsFilters) (string, pgx.NamedArgs)
 
 func getSchedulesQuery(filters models.GetSchedulesFilters) (string, pgx.NamedArgs) {
 	query := `-- getSchedulesQuery
-SELECT channel_id, schedule_weekdays, schedule_hour, schedule_minute, next_override, schedule_checked_at
+SELECT channel_id, schedule_weekdays, schedule_hour, schedule_minute, daily_lead_enabled, next_override, schedule_checked_at
 FROM channels`
 	args := pgx.NamedArgs{}
 	if filters.ChannelID != nil {
@@ -53,6 +53,12 @@ UPDATE channels SET schedule_weekdays = @weekdays, schedule_hour = @hour, schedu
 next_override = CASE WHEN @keep_override THEN next_override ELSE NULL END, schedule_checked_at = now()
 WHERE channel_id = @channel_id
 RETURNING channel_id`, pgx.NamedArgs{"channel_id": schedule.ChannelID, "weekdays": weekdays, "hour": int16(schedule.Hour), "minute": int16(schedule.Minute), "keep_override": keepOverride}
+}
+
+func setLeadEnabledQuery(channelID int64, enabled bool) (string, pgx.NamedArgs) {
+	return `-- setDailyLeadEnabled
+UPDATE channels SET daily_lead_enabled = @enabled WHERE channel_id = @channel_id
+RETURNING channel_id`, pgx.NamedArgs{"channel_id": channelID, "enabled": enabled}
 }
 
 func setOverrideQuery(channelID int64, target time.Time) (string, pgx.NamedArgs) {

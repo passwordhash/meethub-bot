@@ -13,15 +13,9 @@ var moscow = time.FixedZone("UTC+3", 3*60*60)
 
 func RenderDaily(date time.Time, lead *models.Report, mentionLead bool, meetingURL string) string {
 	var message strings.Builder
-	fmt.Fprintf(&message, "Ежедневный отчёт на %s\n\n", date.In(moscow).Format("02.01.2006"))
-	message.WriteString("Встреча в 10:00 (UTC+3)\nСсылка на созвон: ")
-	if meetingURL == "" {
-		message.WriteString("уточняется")
-	} else {
-		fmt.Fprintf(&message, `<a href="%s">подключиться</a>`, html.EscapeString(meetingURL))
-	}
+	fmt.Fprintf(&message, "📅 Дейли Cascade — %s\n📞 Созвон в 10:00 (UTC+3): %s", date.In(moscow).Format("02.01.2006"), html.EscapeString(meetingURL))
 	if lead != nil {
-		message.WriteString("\nВедущий: ")
+		message.WriteString("\n👤 Ведущий: ")
 		name := html.EscapeString(lead.Author)
 		if mentionLead && lead.AuthorID != 0 {
 			fmt.Fprintf(&message, "<a href=\"tg://user?id=%d\">%s</a>", lead.AuthorID, name)
@@ -29,5 +23,6 @@ func RenderDaily(date time.Time, lead *models.Report, mentionLead bool, meetingU
 			message.WriteString(name)
 		}
 	}
+	message.WriteString("\n\nПишите отчёты в тред 👇")
 	return message.String()
 }

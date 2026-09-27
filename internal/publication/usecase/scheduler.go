@@ -64,7 +64,7 @@ func (u *SchedulerUseCase) processSchedule(ctx context.Context, schedule channel
 			continue
 		}
 		if occurrence.Due {
-			if err := u.publishIfUnclaimed(ctx, schedule.ChannelID, occurrence.ScheduledAt); err != nil {
+			if err := u.publishIfUnclaimed(ctx, schedule.ChannelID, occurrence.ScheduledAt, schedule.LeadEnabled); err != nil {
 				return err
 			}
 		}
@@ -75,7 +75,7 @@ func (u *SchedulerUseCase) processSchedule(ctx context.Context, schedule channel
 	return nil
 }
 
-func (u *SchedulerUseCase) publishIfUnclaimed(ctx context.Context, channelID int64, scheduledAt time.Time) error {
+func (u *SchedulerUseCase) publishIfUnclaimed(ctx context.Context, channelID int64, scheduledAt time.Time, leadEnabled bool) error {
 	slot, err := u.slots.Create(ctx, channelID, scheduledAt)
 	if err != nil {
 		return fmt.Errorf("create due publication slot: %w", err)
@@ -83,7 +83,7 @@ func (u *SchedulerUseCase) publishIfUnclaimed(ctx context.Context, channelID int
 	if slot.State != pubmodels.StatePlanned {
 		return nil
 	}
-	prepared, err := u.prepare.Prepare(ctx, channelID, scheduledAt)
+	prepared, err := u.prepare.Prepare(ctx, channelID, scheduledAt, leadEnabled)
 	if err != nil {
 		return fmt.Errorf("prepare scheduled publication: %w", err)
 	}

@@ -27,7 +27,7 @@ func NewPrepareUseCase(slots slotRepository, reports reportRepository, summaries
 	return &PrepareUseCase{slots: slots, reports: reports, summaries: summaries}
 }
 
-func (u *PrepareUseCase) Prepare(ctx context.Context, channelID int64, scheduledAt time.Time) (Prepared, error) {
+func (u *PrepareUseCase) Prepare(ctx context.Context, channelID int64, scheduledAt time.Time, leadEnabled bool) (Prepared, error) {
 	slot, err := u.slots.Create(ctx, channelID, scheduledAt)
 	if err != nil {
 		return Prepared{}, err
@@ -61,7 +61,9 @@ func (u *PrepareUseCase) Prepare(ctx context.Context, channelID int64, scheduled
 		snapshotReports = append(snapshotReports, reportmodels.Report{AuthorID: snapshot.AuthorID, Author: snapshot.Author, Text: snapshot.Text})
 	}
 	var lead *reportmodels.Report
-	if slot.LeadUserID != nil {
+	if !leadEnabled {
+		lead = nil
+	} else if slot.LeadUserID != nil {
 		for i := range snapshotReports {
 			if snapshotReports[i].AuthorID == *slot.LeadUserID {
 				lead = &snapshotReports[i]

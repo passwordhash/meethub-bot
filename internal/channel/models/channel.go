@@ -22,12 +22,13 @@ type GetChannelsFilters struct {
 }
 
 type Schedule struct {
-	ChannelID int64
-	Weekdays  []int
-	Hour      int
-	Minute    int
-	Override  *time.Time
-	CheckedAt *time.Time
+	ChannelID   int64
+	Weekdays    []int
+	Hour        int
+	Minute      int
+	LeadEnabled bool
+	Override    *time.Time
+	CheckedAt   *time.Time
 }
 
 type GetSchedulesFilters struct {

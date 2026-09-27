@@ -13,6 +13,7 @@ type ChannelRepository interface {
 	Create(context.Context, models.Channel) (models.Channel, error)
 	GetSchedules(context.Context, models.GetSchedulesFilters) ([]models.Schedule, error)
 	SetSchedule(context.Context, models.Schedule, bool) error
+	SetLeadEnabled(context.Context, int64, bool) error
 	SetOverride(context.Context, int64, time.Time) error
 }
 type updateProcessor interface {

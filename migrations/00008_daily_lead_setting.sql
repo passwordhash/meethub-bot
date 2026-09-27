@@ -1,0 +1,2 @@
+-- +goose Up
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS daily_lead_enabled BOOLEAN NOT NULL DEFAULT TRUE;

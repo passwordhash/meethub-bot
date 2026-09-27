@@ -42,11 +42,11 @@ func TestPrepareLatestPublishedSnapshotAndReplay(t *testing.T) {
 	})
 	summaries.EXPECT().CreateSummaryParts(gomock.Any(), edition, gomock.Any()).Times(2)
 	uc := NewPrepareUseCase(slots, reports, summaries)
-	first, err := uc.Prepare(context.Background(), 7, at)
+	first, err := uc.Prepare(context.Background(), 7, at, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := uc.Prepare(context.Background(), 7, at)
+	second, err := uc.Prepare(context.Background(), 7, at, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestPrepareFirstPublicationNoLeadSummary(t *testing.T) {
 	slot := pubmodels.Slot{ID: uuid.New(), State: pubmodels.StatePlanned}
 	slots.EXPECT().Create(gomock.Any(), int64(1), gomock.Any()).Return(slot, nil)
 	slots.EXPECT().GetSlots(gomock.Any(), gomock.Any()).Return(nil, nil)
-	got, err := NewPrepareUseCase(slots, reports, summaries).Prepare(context.Background(), 1, time.Now())
+	got, err := NewPrepareUseCase(slots, reports, summaries).Prepare(context.Background(), 1, time.Now(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestPrepareRefusesUnknownSlot(t *testing.T) {
 	slots := NewMockslotRepository(ctrl)
 	slot := pubmodels.Slot{ID: uuid.New(), State: pubmodels.StateUnknown}
 	slots.EXPECT().Create(gomock.Any(), int64(1), gomock.Any()).Return(slot, nil)
-	_, err := NewPrepareUseCase(slots, NewMockreportRepository(ctrl), NewMocksummaryPreparationRepository(ctrl)).Prepare(context.Background(), 1, time.Now())
+	_, err := NewPrepareUseCase(slots, NewMockreportRepository(ctrl), NewMocksummaryPreparationRepository(ctrl)).Prepare(context.Background(), 1, time.Now(), true)
 	if err == nil {
 		t.Fatal("unknown slot accepted")
 	}

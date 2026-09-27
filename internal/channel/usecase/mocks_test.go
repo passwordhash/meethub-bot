@@ -72,6 +72,20 @@ func (mr *MockChannelRepositoryMockRecorder) GetSchedules(arg0, arg1 any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSchedules", reflect.TypeOf((*MockChannelRepository)(nil).GetSchedules), arg0, arg1)
 }
 
+// SetLeadEnabled mocks base method.
+func (m *MockChannelRepository) SetLeadEnabled(arg0 context.Context, arg1 int64, arg2 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetLeadEnabled", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetLeadEnabled indicates an expected call of SetLeadEnabled.
+func (mr *MockChannelRepositoryMockRecorder) SetLeadEnabled(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLeadEnabled", reflect.TypeOf((*MockChannelRepository)(nil).SetLeadEnabled), arg0, arg1, arg2)
+}
+
 // SetOverride mocks base method.
 func (m *MockChannelRepository) SetOverride(arg0 context.Context, arg1 int64, arg2 time.Time) error {
 	m.ctrl.T.Helper()
