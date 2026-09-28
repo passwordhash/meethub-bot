@@ -13,7 +13,7 @@ var moscow = time.FixedZone("UTC+3", 3*60*60)
 
 func RenderDaily(date time.Time, lead *models.Report, mentionLead bool, meetingURL string) string {
 	var message strings.Builder
-	fmt.Fprintf(&message, "📅 Дейли Cascade — %s\n📞 Созвон в 10:00 (UTC+3): %s", date.In(moscow).Format("02.01.2006"), html.EscapeString(meetingURL))
+	fmt.Fprintf(&message, "📅 Дейли команды — %s\n📞 Созвон в 10:00 (UTC+3): %s", date.In(moscow).Format("02.01.2006"), html.EscapeString(meetingURL))
 	if lead != nil {
 		message.WriteString("\n👤 Ведущий: ")
 		name := html.EscapeString(lead.Author)

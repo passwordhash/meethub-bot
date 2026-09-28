@@ -194,7 +194,7 @@ func (u *ChannelUseCase) move(ctx context.Context, chatID int64, args []string) 
 }
 
 func (u *ChannelUseCase) sendMenu(ctx context.Context, chatID int64) error {
-	return u.telegram.SendKeyboard(ctx, chatID, "Настройки дейли Cascade:", [][]models.InlineButton{
+	return u.telegram.SendKeyboard(ctx, chatID, "Настройки ежедневных публикаций:", [][]models.InlineButton{
 		{{Text: "🗓 Расписание", CallbackData: "ui:schedule"}},
 		{{Text: "👤 Случайный ведущий", CallbackData: "ui:lead"}},
 	})
