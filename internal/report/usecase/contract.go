@@ -21,5 +21,5 @@ type slotReader interface {
 }
 
 type reportWriter interface {
-	SaveLatest(context.Context, reportmodels.Report) error
+	SaveFirst(context.Context, reportmodels.Report) error
 }

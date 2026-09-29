@@ -137,16 +137,16 @@ func (m *MockreportWriter) EXPECT() *MockreportWriterMockRecorder {
 	return m.recorder
 }
 
-// SaveLatest mocks base method.
-func (m *MockreportWriter) SaveLatest(arg0 context.Context, arg1 models1.Report) error {
+// SaveFirst mocks base method.
+func (m *MockreportWriter) SaveFirst(arg0 context.Context, arg1 models1.Report) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SaveLatest", arg0, arg1)
+	ret := m.ctrl.Call(m, "SaveFirst", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SaveLatest indicates an expected call of SaveLatest.
-func (mr *MockreportWriterMockRecorder) SaveLatest(arg0, arg1 any) *gomock.Call {
+// SaveFirst indicates an expected call of SaveFirst.
+func (mr *MockreportWriterMockRecorder) SaveFirst(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveLatest", reflect.TypeOf((*MockreportWriter)(nil).SaveLatest), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveFirst", reflect.TypeOf((*MockreportWriter)(nil).SaveFirst), arg0, arg1)
 }

@@ -14,10 +14,10 @@ type Repository struct{ getter postgres.Getter }
 
 func New(getter postgres.Getter) *Repository { return &Repository{getter: getter} }
 
-func (r *Repository) SaveLatest(ctx context.Context, report models.Report) error {
-	query, args := saveLatestQuery(report)
+func (r *Repository) SaveFirst(ctx context.Context, report models.Report) error {
+	query, args := saveFirstQuery(report)
 	if _, err := r.getter.Get(ctx).Exec(ctx, query, args); err != nil {
-		return fmt.Errorf("save latest report: %w", err)
+		return fmt.Errorf("save first report: %w", err)
 	}
 	return nil
 }

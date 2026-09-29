@@ -6,8 +6,8 @@ import (
 	"github.com/passwordhash/cascade-hub-bot/internal/report/models"
 )
 
-func saveLatestQuery(report models.Report) (string, pgx.NamedArgs) {
-	return `-- saveLatestReport
+func saveFirstQuery(report models.Report) (string, pgx.NamedArgs) {
+	return `-- saveFirstReport
 INSERT INTO reports (slot_id, user_id, display_name, text, message_id, message_at, edit_at)
 VALUES (@slot_id, @user_id, @display_name, @text, @message_id, @message_at, @edit_at)
 ON CONFLICT (slot_id, user_id) DO UPDATE SET
@@ -17,8 +17,9 @@ ON CONFLICT (slot_id, user_id) DO UPDATE SET
     message_at = EXCLUDED.message_at,
     edit_at = EXCLUDED.edit_at,
     updated_at = now()
-WHERE (reports.message_at, reports.message_id, COALESCE(reports.edit_at, reports.message_at))
-    < (EXCLUDED.message_at, EXCLUDED.message_id, COALESCE(EXCLUDED.edit_at, EXCLUDED.message_at))`, pgx.NamedArgs{
+WHERE (reports.message_at, reports.message_id) > (EXCLUDED.message_at, EXCLUDED.message_id)
+    OR (reports.message_id = EXCLUDED.message_id
+        AND COALESCE(reports.edit_at, reports.message_at) < COALESCE(EXCLUDED.edit_at, EXCLUDED.message_at))`, pgx.NamedArgs{
 			"slot_id": report.SlotID, "user_id": report.AuthorID, "display_name": report.Author,
 			"text": report.Text, "message_id": report.MessageID, "message_at": report.MessageAt, "edit_at": report.EditAt,
 		}

@@ -69,7 +69,7 @@ func (u *Ingestion) Handle(ctx context.Context, update channelmodels.Update) err
 	if !ok || !eligible {
 		return nil
 	}
-	return u.reports.SaveLatest(ctx, report)
+	return u.reports.SaveFirst(ctx, report)
 }
 
 func linkedForward(update channelmodels.Update) bool {

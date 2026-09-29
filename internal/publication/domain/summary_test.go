@@ -14,7 +14,8 @@ func TestRenderSummary(t *testing.T) {
 		want  []string
 	}{
 		{name: "empty", want: []string{}},
-		{name: "multiple authors", plans: []models.Plan{{Author: "Анна", Text: "план"}, {Author: "李", Text: "задача"}}, want: []string{"Анна:\nплан", "李:\nзадача"}},
+		{name: "multiple authors", plans: []models.Plan{{Author: "Анна", Text: "план"}, {Author: "李", Text: "задача"}}, want: []string{"Анна:\nплан\n\n李:\nзадача"}},
+		{name: "combined summary exceeds telegram limit", plans: []models.Plan{{Author: "Первый", Text: strings.Repeat("a", 3000)}, {Author: "Второй", Text: strings.Repeat("b", 3000)}}, want: []string{"Первый:\n" + strings.Repeat("a", 3000), "Второй:\n" + strings.Repeat("b", 3000)}},
 		{name: "exact boundary", plans: []models.Plan{{Author: "А", Text: strings.Repeat("x", telegramMessageLimit-3)}}, want: []string{"А:\n" + strings.Repeat("x", telegramMessageLimit-3)}},
 		{name: "fallback ID and special text", plans: []models.Plan{{AuthorID: 42, Text: "😀 & <текст>\nстрока"}}, want: []string{"Участник 42:\n😀 & <текст>\nстрока"}},
 	}

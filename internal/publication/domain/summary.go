@@ -34,6 +34,12 @@ func RenderSummary(plans []models.Plan) []string {
 			continuation = true
 		}
 	}
+	if len(messages) > 1 {
+		combined := strings.Join(messages, "\n\n")
+		if utf16Length(combined) <= telegramMessageLimit {
+			return []string{combined}
+		}
+	}
 	return messages
 }
 
