@@ -27,6 +27,8 @@ type scheduleRepository interface {
 	SetScheduleCheckedAt(context.Context, int64, time.Time) error
 }
 type scheduleSlotRepository interface {
+	GetSlots(context.Context, pubmodels.GetSlotsFilters) ([]pubmodels.Slot, error)
+	MarkPublishAlerted(context.Context, uuid.UUID) error
 	Create(context.Context, int64, time.Time) (pubmodels.Slot, error)
 	Transition(context.Context, uuid.UUID, pubmodels.State, pubmodels.State, *int64, *int64, *int64) (pubmodels.Slot, error)
 	Recover(context.Context) ([]pubmodels.Slot, error)

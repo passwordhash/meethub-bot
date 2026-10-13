@@ -8,9 +8,15 @@ type channelEntity struct {
 }
 
 type scheduleEntity struct {
-	ChannelID   int64      `db:"channel_id"`
-	Cron        *string    `db:"schedule_cron"`
-	LeadEnabled bool       `db:"daily_lead_enabled"`
-	Override    *time.Time `db:"next_override"`
-	CheckedAt   *time.Time `db:"schedule_checked_at"`
+	ChannelID         int64      `db:"channel_id"`
+	PostOffsetMinutes int        `db:"post_offset_minutes"`
+	LeadEnabled       bool       `db:"daily_lead_enabled"`
+	ResetPending      bool       `db:"schedule_reset_pending"`
+	CheckedAt         *time.Time `db:"schedule_checked_at"`
+}
+
+type dailyTimeEntity struct {
+	ChannelID       int64 `db:"channel_id"`
+	Weekday         int16 `db:"weekday"`
+	StartsAtMinutes int   `db:"starts_at_minutes"`
 }

@@ -1,23 +1,33 @@
 package channels
 
-import "github.com/passwordhash/cascade-hub-bot/internal/channel/models"
+import (
+	"time"
+
+	"github.com/passwordhash/cascade-hub-bot/internal/channel/models"
+)
 
 func entityToModel(entity channelEntity) models.Channel {
 	return models.Channel{ChannelID: entity.ChannelID, GroupID: entity.GroupID}
 }
 
-func scheduleEntityToModel(entity scheduleEntity) models.Schedule {
-	schedule := models.Schedule{ChannelID: entity.ChannelID, LeadEnabled: entity.LeadEnabled, Override: entity.Override, CheckedAt: entity.CheckedAt}
-	if entity.Cron != nil {
-		schedule.Cron = *entity.Cron
-	}
-	return schedule
-}
-
-func scheduleEntitiesToModels(entities []scheduleEntity) []models.Schedule {
+func scheduleEntitiesToModels(entities []scheduleEntity, dailyTimes []dailyTimeEntity) []models.Schedule {
 	schedules := make([]models.Schedule, 0, len(entities))
+	indexes := make(map[int64]int, len(entities))
 	for _, entity := range entities {
-		schedules = append(schedules, scheduleEntityToModel(entity))
+		indexes[entity.ChannelID] = len(schedules)
+		schedules = append(schedules, models.Schedule{
+			ChannelID:         entity.ChannelID,
+			DailyTimes:        make(map[time.Weekday]time.Duration),
+			PostOffsetMinutes: entity.PostOffsetMinutes,
+			LeadEnabled:       entity.LeadEnabled,
+			ResetPending:      entity.ResetPending,
+			CheckedAt:         entity.CheckedAt,
+		})
+	}
+	for _, entity := range dailyTimes {
+		if index, found := indexes[entity.ChannelID]; found {
+			schedules[index].DailyTimes[time.Weekday(entity.Weekday)] = time.Duration(entity.StartsAtMinutes) * time.Minute
+		}
 	}
 	return schedules
 }

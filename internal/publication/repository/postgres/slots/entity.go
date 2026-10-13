@@ -20,4 +20,5 @@ type slotEntity struct {
 	LeadUserID       *int64     `db:"lead_user_id"`
 	PublishedAt      *time.Time `db:"published_at"`
 	LinkAlertedAt    *time.Time `db:"link_alerted_at"`
+	PublishAlertedAt *time.Time `db:"publish_alerted_at"`
 }

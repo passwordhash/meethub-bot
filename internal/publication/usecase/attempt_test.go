@@ -32,9 +32,9 @@ func TestAttempt(t *testing.T) {
 	}{
 		{name: "missing URL", state: pubmodels.StatePlanned, channels: []channelmodels.Channel{{ChannelID: 7, GroupID: 8}}, permissions: validPermissions(8), wantState: pubmodels.StatePlanned, wantError: true},
 		{name: "disconnected channel", state: pubmodels.StatePlanned, url: "https://meet.example/room", wantState: pubmodels.StatePlanned, wantError: true},
-		{name: "wrong group", state: pubmodels.StatePlanned, url: "https://meet.example/room", channels: []channelmodels.Channel{{ChannelID: 7, GroupID: 9}}, permissions: validPermissions(8), wantState: pubmodels.StatePlanned, wantError: true, wantVerify: true, wantNotify: true},
-		{name: "verification failed", state: pubmodels.StatePlanned, url: "https://meet.example/room", channels: []channelmodels.Channel{{ChannelID: 7, GroupID: 8}}, verifyErr: errors.New("verification failed"), wantState: pubmodels.StatePlanned, wantError: true, wantVerify: true, wantNotify: true},
-		{name: "no posting rights", state: pubmodels.StatePlanned, url: "https://meet.example/room", channels: []channelmodels.Channel{{ChannelID: 7, GroupID: 8}}, wantState: pubmodels.StatePlanned, wantError: true, wantVerify: true, wantNotify: true},
+		{name: "wrong group", state: pubmodels.StatePlanned, url: "https://meet.example/room", channels: []channelmodels.Channel{{ChannelID: 7, GroupID: 9}}, permissions: validPermissions(8), wantState: pubmodels.StatePlanned, wantError: true, wantVerify: true},
+		{name: "verification failed", state: pubmodels.StatePlanned, url: "https://meet.example/room", channels: []channelmodels.Channel{{ChannelID: 7, GroupID: 8}}, verifyErr: errors.New("verification failed"), wantState: pubmodels.StatePlanned, wantError: true, wantVerify: true},
+		{name: "no posting rights", state: pubmodels.StatePlanned, url: "https://meet.example/room", channels: []channelmodels.Channel{{ChannelID: 7, GroupID: 8}}, wantState: pubmodels.StatePlanned, wantError: true, wantVerify: true},
 		{name: "success", state: pubmodels.StatePlanned, url: "https://meet.example/room", channels: []channelmodels.Channel{{ChannelID: 7, GroupID: 8}}, permissions: validPermissions(8), sendID: 123, wantState: pubmodels.StatePublished, wantVerify: true, wantSend: true},
 		{name: "send outcome unknown", state: pubmodels.StatePlanned, url: "https://meet.example/room", channels: []channelmodels.Channel{{ChannelID: 7, GroupID: 8}}, permissions: validPermissions(8), sendErr: errors.New("transport failed"), wantState: pubmodels.StateUnknown, wantError: true, wantVerify: true, wantSend: true, wantNotify: true},
 		{name: "nonpositive message ID", state: pubmodels.StatePlanned, url: "https://meet.example/room", channels: []channelmodels.Channel{{ChannelID: 7, GroupID: 8}}, permissions: validPermissions(8), wantState: pubmodels.StateUnknown, wantError: true, wantVerify: true, wantSend: true, wantNotify: true},
@@ -71,9 +71,7 @@ func TestAttempt(t *testing.T) {
 			channels.EXPECT().GetChannels(gomock.Any(), channelmodels.GetChannelsFilters{ChannelID: ptr(int64(7))}).Return(tt.channels, tt.channelErr)
 			if len(tt.channels) > 0 && tt.channelErr == nil {
 				client.EXPECT().VerifyChannel(gomock.Any(), int64(7), int64(99)).Return(tt.permissions, tt.verifyErr).Times(boolCount(tt.wantVerify))
-				if tt.wantVerify && (tt.verifyErr != nil || tt.permissions.Validate(7) != nil || tt.permissions.LinkedGroupID != tt.channels[0].GroupID) {
-					notifier.EXPECT().NotifyPublicationProblem(gomock.Any(), int64(7)).Return(nil)
-				} else if tt.wantVerify {
+				if tt.wantVerify && tt.verifyErr == nil && tt.permissions.Validate(7) == nil && tt.permissions.LinkedGroupID == tt.channels[0].GroupID {
 					slotTrying := slot
 					slotTrying.State = pubmodels.StateAttempting
 					slots.EXPECT().Transition(gomock.Any(), slot.ID, pubmodels.StatePlanned, pubmodels.StateAttempting, nil, nil, slot.LeadUserID).Return(slotTrying, nil)

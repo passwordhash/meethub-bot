@@ -5,96 +5,78 @@ import (
 	"time"
 )
 
-func TestNextOccurrence(t *testing.T) {
-	loc := Moscow
+func TestParseStartsAt(t *testing.T) {
 	tests := []struct {
-		name     string
-		now      time.Time
-		cron     string
-		override *time.Time
-		want     time.Time
+		name    string
+		text    string
+		want    time.Duration
+		wantErr bool
 	}{
-		{"week boundary", time.Date(2025, 1, 5, 12, 0, 0, 0, loc), "0 9 * * 1", nil, time.Date(2025, 1, 6, 9, 0, 0, 0, loc)},
-		{"same-day past", time.Date(2025, 1, 6, 10, 0, 0, 0, loc), "0 9 * * 1", nil, time.Date(2025, 1, 13, 9, 0, 0, 0, loc)},
-		{"UTC+3", time.Date(2025, 1, 5, 21, 30, 0, 0, time.UTC), "0 1 * * 1", nil, time.Date(2025, 1, 6, 1, 0, 0, 0, loc)},
-		{"day and month fields", time.Date(2025, 1, 1, 0, 0, 0, 0, loc), "30 9 15 2 *", nil, time.Date(2025, 2, 15, 9, 30, 0, 0, loc)},
-		{"override replaces nearest even if later", time.Date(2025, 1, 5, 12, 0, 0, 0, loc), "0 9 * * 1", ptr(time.Date(2025, 1, 7, 15, 0, 0, 0, loc)), time.Date(2025, 1, 7, 15, 0, 0, 0, loc)},
-		{"invalid crossing override ignored", time.Date(2025, 1, 5, 12, 0, 0, 0, loc), "0 9 * * 1,3", ptr(time.Date(2025, 1, 8, 9, 0, 0, 0, loc)), time.Date(2025, 1, 6, 9, 0, 0, 0, loc)},
+		{name: "midnight", text: "00:00", want: 0},
+		{name: "arbitrary minute", text: "12:37", want: 12*time.Hour + 37*time.Minute},
+		{name: "last minute of day", text: "23:59", want: 23*time.Hour + 59*time.Minute},
+		{name: "single digit hour rejected", text: "9:30", wantErr: true},
+		{name: "hour out of range", text: "24:00", wantErr: true},
+		{name: "minute out of range", text: "10:60", wantErr: true},
+		{name: "dot separator rejected", text: "10.30", wantErr: true},
+		{name: "seconds rejected", text: "10:30:00", wantErr: true},
+		{name: "empty", text: "", wantErr: true},
+		{name: "text", text: "утро", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NextOccurrence(tt.now, tt.cron, tt.override)
-			if got == nil || !got.Equal(tt.want) {
-				t.Fatalf("got %v; want %v", got, tt.want)
+			got, err := ParseStartsAt(tt.text)
+			if (err != nil) != tt.wantErr || got != tt.want {
+				t.Fatalf("ParseStartsAt(%q) = %v, %v", tt.text, got, err)
 			}
 		})
 	}
 }
 
-func TestParseScheduleInputs(t *testing.T) {
-	if schedule, err := ParseCron("30 9 * * 1,3,5"); err != nil || schedule == nil {
-		t.Fatalf("ParseCron returned %v, %v", schedule, err)
-	}
-	for _, invalid := range []string{"", "0", "60 9 * * 1", "0 25 * * 1", "@daily"} {
-		if _, err := ParseCron(invalid); err == nil {
-			t.Errorf("ParseCron(%q) succeeded", invalid)
-		}
+func TestFormatStartsAt(t *testing.T) {
+	if got := FormatStartsAt(9*time.Hour + 5*time.Minute); got != "09:05" {
+		t.Fatalf("FormatStartsAt() = %q", got)
 	}
 }
 
-func TestValidateMove(t *testing.T) {
-	loc := Moscow
-	now := time.Date(2025, 1, 6, 8, 0, 0, 0, loc)
-	schedule := Schedule{Cron: "0 9 * * 1,3"}
+func TestValidatePostOffset(t *testing.T) {
 	tests := []struct {
-		name     string
-		now      time.Time
-		schedule Schedule
-		target   time.Time
-		valid    bool
+		name    string
+		minutes int
+		wantErr bool
 	}{
-		{"earlier than first is allowed", now, schedule, time.Date(2025, 1, 6, 8, 30, 0, 0, loc), true},
-		{"same day before now rejected", now, schedule, time.Date(2025, 1, 6, 7, 59, 0, 0, loc), false},
-		{"same day future before first allowed", now, schedule, time.Date(2025, 1, 6, 8, 1, 0, 0, loc), true},
-		{"second slot equality rejected", now, schedule, time.Date(2025, 1, 8, 9, 0, 0, 0, loc), false},
-		{"after second rejected", now, schedule, time.Date(2025, 1, 9, 9, 0, 0, 0, loc), false},
-		{"month rollover second equality rejected", time.Date(2025, 1, 31, 10, 0, 0, 0, loc), Schedule{Cron: "0 9 15 * *"}, time.Date(2025, 3, 15, 9, 0, 0, 0, loc), false},
-		{"missing schedule rejected", now, Schedule{}, time.Date(2025, 1, 6, 8, 30, 0, 0, loc), false},
+		{name: "zero", minutes: 0},
+		{name: "maximum", minutes: 1439},
+		{name: "negative", minutes: -1, wantErr: true},
+		{name: "full day", minutes: 1440, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateMove(tt.now, tt.schedule, tt.target)
-			if (err == nil) != tt.valid {
-				t.Fatalf("ValidateMove error = %v, want valid %v", err, tt.valid)
+			if err := ValidatePostOffset(tt.minutes); (err != nil) != tt.wantErr {
+				t.Fatalf("ValidatePostOffset(%d) = %v", tt.minutes, err)
 			}
 		})
 	}
 }
 
-func TestScheduleEditPreservesOnlyStillValidFutureOverride(t *testing.T) {
-	now := time.Date(2025, 1, 6, 8, 0, 0, 0, Moscow)
-	schedule := Schedule{Cron: "0 9 * * 1,3"}
-	for _, tt := range []struct {
-		name   string
-		target time.Time
-		keep   bool
+func TestNextDateOf(t *testing.T) {
+	tests := []struct {
+		name    string
+		now     time.Time
+		weekday time.Weekday
+		want    time.Time
 	}{
-		{"valid before second", time.Date(2025, 1, 7, 8, 0, 0, 0, Moscow), true},
-		{"at second", time.Date(2025, 1, 8, 9, 0, 0, 0, Moscow), false},
-		{"expired", time.Date(2025, 1, 6, 7, 0, 0, 0, Moscow), false},
-	} {
+		{name: "same weekday is today", now: time.Date(2026, 10, 12, 23, 0, 0, 0, Moscow), weekday: time.Monday, want: time.Date(2026, 10, 12, 0, 0, 0, 0, Moscow)},
+		{name: "later in week", now: time.Date(2026, 10, 12, 9, 0, 0, 0, Moscow), weekday: time.Friday, want: time.Date(2026, 10, 16, 0, 0, 0, 0, Moscow)},
+		{name: "earlier weekday wraps to next week", now: time.Date(2026, 10, 14, 9, 0, 0, 0, Moscow), weekday: time.Monday, want: time.Date(2026, 10, 19, 0, 0, 0, 0, Moscow)},
+		{name: "Sunday after Monday", now: time.Date(2026, 10, 12, 9, 0, 0, 0, Moscow), weekday: time.Sunday, want: time.Date(2026, 10, 18, 0, 0, 0, 0, Moscow)},
+		{name: "UTC evening is next Moscow day", now: time.Date(2026, 10, 12, 21, 30, 0, 0, time.UTC), weekday: time.Tuesday, want: time.Date(2026, 10, 13, 0, 0, 0, 0, Moscow)},
+	}
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := KeepOverrideAfterScheduleEdit(now, schedule, &tt.target); got != tt.keep {
-				t.Fatalf("keep = %v, want %v", got, tt.keep)
+			if got := NextDateOf(tt.now, tt.weekday); !got.Equal(tt.want) {
+				t.Fatalf("NextDateOf() = %v; want %v", got, tt.want)
 			}
 		})
 	}
 }
-
-func TestNextOccurrenceWithoutSchedule(t *testing.T) {
-	if got := NextOccurrence(time.Now(), "", nil); got != nil {
-		t.Fatalf("unset schedule returned %v", got)
-	}
-}
-
-func ptr(value time.Time) *time.Time { return &value }

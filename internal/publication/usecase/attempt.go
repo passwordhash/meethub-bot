@@ -46,10 +46,10 @@ func (u *AttemptUseCase) Attempt(ctx context.Context, prepared Prepared) (pubmod
 	}
 	permissions, err := u.telegram.VerifyChannel(ctx, channelID, u.ownerID)
 	if err != nil {
-		return slot, errors.Join(fmt.Errorf("verify publication channel: %w", err), u.notifyOwner(ctx, channelID))
+		return slot, fmt.Errorf("verify publication channel: %w", err)
 	}
 	if err := permissions.Validate(channelID); err != nil || permissions.LinkedGroupID != channels[0].GroupID {
-		return slot, errors.Join(errors.New("publication channel permissions or linked group do not match configuration"), u.notifyOwner(ctx, channelID))
+		return slot, errors.New("publication channel permissions or linked group do not match configuration")
 	}
 	attempting, err := u.slots.Transition(ctx, slot.ID, pubmodels.StatePlanned, pubmodels.StateAttempting, nil, nil, slot.LeadUserID)
 	if err != nil {

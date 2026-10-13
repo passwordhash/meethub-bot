@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/passwordhash/cascade-hub-bot/internal/channel/models"
+	pubmodels "github.com/passwordhash/cascade-hub-bot/internal/publication/models"
 )
 
 //go:generate go run go.uber.org/mock/mockgen -source=$GOFILE -destination=mocks_test.go -package=$GOPACKAGE
@@ -12,9 +13,14 @@ import (
 type ChannelRepository interface {
 	Create(context.Context, models.Channel) (models.Channel, error)
 	GetSchedules(context.Context, models.GetSchedulesFilters) ([]models.Schedule, error)
-	SetSchedule(context.Context, models.Schedule, bool) error
+	SetDailyTime(context.Context, int64, time.Weekday, time.Duration) error
+	DeleteDailyTime(context.Context, int64, time.Weekday) error
+	SetPostOffset(context.Context, int64, int) error
 	SetLeadEnabled(context.Context, int64, bool) error
-	SetOverride(context.Context, int64, time.Time) error
+	ClearScheduleReset(context.Context, int64) error
+}
+type slotRepository interface {
+	GetSlots(context.Context, pubmodels.GetSlotsFilters) ([]pubmodels.Slot, error)
 }
 type updateProcessor interface {
 	GetOffset(context.Context) (int64, error)

@@ -26,10 +26,15 @@ type Slot struct {
 	LeadUserID       *int64
 	PublishedAt      *time.Time
 	LinkAlertedAt    *time.Time
+	PublishAlertedAt *time.Time
 }
 
+var ClaimedStates = []State{StateAttempting, StateUnknown, StatePublished}
+
 type GetSlotsFilters struct {
-	ID        *uuid.UUID
-	ChannelID *int64
-	State     []State
+	ID            *uuid.UUID
+	ChannelID     *int64
+	State         []State
+	ScheduledFrom *time.Time
+	ScheduledTo   *time.Time
 }

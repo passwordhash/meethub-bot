@@ -45,7 +45,7 @@ func New(ctx context.Context) (*App, error) {
 	notifier := ownerNotifier{telegram: telegramClient, ownerID: cfg.Telegram.OwnerID}
 	ingestion := reportUseCase.NewIngestion(channelRepository, slotRepository, reportRepository)
 	processor := telegramUpdateUseCase.NewProcessor(pool, offsetRepository, ingestion)
-	channelUseCase := usecase.NewChannelUseCase(cfg.Telegram.OwnerID, channelRepository, telegramClient, processor)
+	channelUseCase := usecase.NewChannelUseCase(cfg.Telegram.OwnerID, channelRepository, slotRepository, telegramClient, processor)
 	prepare := publicationUseCase.NewPrepareUseCase(slotRepository, reportRepository, summaryRepository)
 	attempt, err := publicationUseCase.NewAttemptUseCase(slotRepository, channelRepository, telegramClient, notifier, cfg.Telegram.OwnerID, cfg.MeetingURL)
 	if err != nil {
