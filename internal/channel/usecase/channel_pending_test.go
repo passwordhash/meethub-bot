@@ -20,7 +20,10 @@ func TestRunCancelsWhileUpdatePending(t *testing.T) {
 		return models.ErrUpdatePending
 	})
 
-	channel := NewChannelUseCase(1, nil, telegram, processor)
+	repository := NewMockChannelRepository(controller)
+	repository.EXPECT().GetSchedules(gomock.Any(), models.GetSchedulesFilters{}).Return(nil, nil)
+
+	channel := NewChannelUseCase(1, repository, nil, telegram, processor)
 	if err := channel.Run(ctx); err != nil {
 		t.Fatal(err)
 	}

@@ -32,7 +32,7 @@ func getChannelsQuery(filters models.GetChannelsFilters) (string, pgx.NamedArgs)
 
 func getSchedulesQuery(filters models.GetSchedulesFilters) (string, pgx.NamedArgs) {
 	query := `-- getSchedulesQuery
-SELECT channel_id, schedule_cron, daily_lead_enabled, next_override, schedule_checked_at
+SELECT channel_id, post_offset_minutes, daily_lead_enabled, schedule_reset_pending, schedule_checked_at
 FROM channels`
 	args := pgx.NamedArgs{}
 	if filters.ChannelID != nil {
@@ -43,12 +43,40 @@ WHERE channel_id = @channel_id`
 	return query, args
 }
 
-func setScheduleQuery(schedule models.Schedule, keepOverride bool) (string, pgx.NamedArgs) {
-	return `-- setScheduleQuery
-UPDATE channels SET schedule_cron = @cron,
-next_override = CASE WHEN @keep_override THEN next_override ELSE NULL END, schedule_checked_at = now()
-WHERE channel_id = @channel_id
-RETURNING channel_id`, pgx.NamedArgs{"channel_id": schedule.ChannelID, "cron": schedule.Cron, "keep_override": keepOverride}
+func getDailyTimesQuery(filters models.GetSchedulesFilters) (string, pgx.NamedArgs) {
+	query := `-- getDailyTimesQuery
+SELECT channel_id, weekday, (EXTRACT(EPOCH FROM starts_at) / 60)::INT AS starts_at_minutes
+FROM channel_daily_times`
+	args := pgx.NamedArgs{}
+	if filters.ChannelID != nil {
+		query += `
+WHERE channel_id = @channel_id`
+		args["channel_id"] = *filters.ChannelID
+	}
+	return query, args
+}
+
+func setDailyTimeQuery(channelID int64, weekday time.Weekday, startsAt time.Duration) (string, pgx.NamedArgs) {
+	return `-- setDailyTimeQuery
+WITH channel AS (
+    UPDATE channels SET schedule_checked_at = COALESCE(schedule_checked_at, now()) WHERE channel_id = @channel_id
+    RETURNING channel_id
+)
+INSERT INTO channel_daily_times (channel_id, weekday, starts_at)
+SELECT channel_id, @weekday::SMALLINT, make_time(@starts_at_minutes::INT / 60, @starts_at_minutes::INT % 60, 0) FROM channel
+ON CONFLICT (channel_id, weekday) DO UPDATE SET starts_at = EXCLUDED.starts_at
+RETURNING channel_id`, pgx.NamedArgs{"channel_id": channelID, "weekday": int16(weekday), "starts_at_minutes": int32(startsAt / time.Minute)}
+}
+
+func deleteDailyTimeQuery(channelID int64, weekday time.Weekday) (string, pgx.NamedArgs) {
+	return `-- deleteDailyTimeQuery
+DELETE FROM channel_daily_times WHERE channel_id = @channel_id AND weekday = @weekday`, pgx.NamedArgs{"channel_id": channelID, "weekday": int16(weekday)}
+}
+
+func setPostOffsetQuery(channelID int64, minutes int) (string, pgx.NamedArgs) {
+	return `-- setPostOffsetQuery
+UPDATE channels SET post_offset_minutes = @minutes WHERE channel_id = @channel_id
+RETURNING channel_id`, pgx.NamedArgs{"channel_id": channelID, "minutes": minutes}
 }
 
 func setLeadEnabledQuery(channelID int64, enabled bool) (string, pgx.NamedArgs) {
@@ -57,11 +85,10 @@ UPDATE channels SET daily_lead_enabled = @enabled WHERE channel_id = @channel_id
 RETURNING channel_id`, pgx.NamedArgs{"channel_id": channelID, "enabled": enabled}
 }
 
-func setOverrideQuery(channelID int64, target time.Time) (string, pgx.NamedArgs) {
-	return `-- setOverrideQuery
-UPDATE channels SET next_override = @target, schedule_checked_at = now()
-WHERE channel_id = @channel_id AND schedule_cron IS NOT NULL
-RETURNING channel_id`, pgx.NamedArgs{"channel_id": channelID, "target": target}
+func clearScheduleResetQuery(channelID int64) (string, pgx.NamedArgs) {
+	return `-- clearScheduleResetQuery
+UPDATE channels SET schedule_reset_pending = FALSE WHERE channel_id = @channel_id
+RETURNING channel_id`, pgx.NamedArgs{"channel_id": channelID}
 }
 
 func setScheduleCheckedAtQuery(channelID int64, checkedAt time.Time) (string, pgx.NamedArgs) {

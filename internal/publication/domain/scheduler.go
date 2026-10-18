@@ -1,72 +1,59 @@
 package domain
 
 import (
-	"sort"
 	"time"
 
 	channelmodels "github.com/passwordhash/cascade-hub-bot/internal/channel/models"
 )
 
-const maxScheduleOccurrences = 100
+const maxScheduleLookback = 7 * 24 * time.Hour
 
 type ScheduleOccurrence struct {
-	ScheduledAt time.Time
-	Due         bool
-	Missed      bool
-}
-
-func EvaluateSchedule(schedule channelmodels.Schedule, watermark *time.Time, now time.Time) ScheduleOccurrence {
-	occurrences := ScheduleOccurrences(schedule, watermark, now)
-	for _, occurrence := range occurrences {
-		if occurrence.Due {
-			return occurrence
-		}
-	}
-	if len(occurrences) > 0 {
-		return occurrences[len(occurrences)-1]
-	}
-	return ScheduleOccurrence{}
+	StartsAt time.Time
+	Due      bool
+	Missed   bool
 }
 
 func ScheduleOccurrences(schedule channelmodels.Schedule, watermark *time.Time, now time.Time) []ScheduleOccurrence {
-	cronSchedule, err := channelmodels.ParseCron(schedule.Cron)
-	if err != nil {
-		return nil
-	}
 	localNow := now.In(channelmodels.Moscow)
-	start := localNow
-	if watermark != nil && watermark.Before(now) {
-		start = watermark.In(channelmodels.Moscow)
-	} else if watermark == nil {
-		start = time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, channelmodels.Moscow).Add(-time.Minute)
-	}
-	cutoff := localNow.Add(-maxScheduleOccurrences * time.Minute)
-	if start.Before(cutoff) {
-		start = cutoff
-	}
-	regular := make([]time.Time, 0, maxScheduleOccurrences)
-	for candidate := cronSchedule.Next(start); !candidate.IsZero() && !candidate.After(localNow); candidate = cronSchedule.Next(candidate) {
-		regular = append(regular, candidate)
-	}
-	if schedule.Override != nil && (watermark == nil || schedule.Override.After(*watermark)) {
-		if len(regular) > 0 {
-			regular[0] = schedule.Override.In(channelmodels.Moscow)
-		} else {
-			regular = append(regular, schedule.Override.In(channelmodels.Moscow))
-		}
-	}
-	sort.Slice(regular, func(i, j int) bool { return regular[i].Before(regular[j]) })
-	occurrences := make([]ScheduleOccurrence, 0, len(regular))
-	for _, candidate := range regular {
-		if candidate.After(localNow) {
+	after := occurrencesAfter(watermark, localNow)
+	last := localNow.Add(schedule.PostOffset())
+	occurrences := make([]ScheduleOccurrence, 0, len(schedule.DailyTimes))
+	firstDay, _ := channelmodels.MoscowDay(after)
+	for day := firstDay; !day.After(last); day = day.AddDate(0, 0, 1) {
+		dailyTime, scheduled := schedule.DailyTimes[day.Weekday()]
+		if !scheduled {
 			continue
 		}
-		occurrence := ScheduleOccurrence{ScheduledAt: candidate, Missed: true}
-		if localNow.Sub(candidate) < time.Minute {
-			occurrence.Due = true
-			occurrence.Missed = false
+		startsAt := day.Add(dailyTime)
+		if !startsAt.After(after) || startsAt.After(last) {
+			continue
 		}
-		occurrences = append(occurrences, occurrence)
+		occurrences = append(occurrences, classify(startsAt, schedule.PostOffset(), localNow))
 	}
 	return occurrences
+}
+
+func occurrencesAfter(watermark *time.Time, localNow time.Time) time.Time {
+	dayStart, _ := channelmodels.MoscowDay(localNow)
+	after := dayStart.Add(-time.Minute)
+	if watermark != nil {
+		after = watermark.In(channelmodels.Moscow)
+		if after.After(localNow) {
+			after = localNow
+		}
+	}
+	if cutoff := localNow.Add(-maxScheduleLookback); after.Before(cutoff) {
+		after = cutoff
+	}
+	return after
+}
+
+func classify(startsAt time.Time, offset time.Duration, localNow time.Time) ScheduleOccurrence {
+	deadline := startsAt
+	if minuteWindow := startsAt.Add(-offset).Add(time.Minute); minuteWindow.After(deadline) {
+		deadline = minuteWindow
+	}
+	missed := !localNow.Before(deadline)
+	return ScheduleOccurrence{StartsAt: startsAt, Due: !missed, Missed: missed}
 }

@@ -42,32 +42,50 @@ func (r *Repository) GetSchedules(ctx context.Context, filters models.GetSchedul
 	if err != nil {
 		return nil, fmt.Errorf("get channel schedules: %w", err)
 	}
-	return scheduleEntitiesToModels(entities), nil
+	query, args = getDailyTimesQuery(filters)
+	rows, err = r.getter.Get(ctx).Query(ctx, query, args)
+	if err != nil {
+		return nil, fmt.Errorf("get channel daily times: %w", err)
+	}
+	dailyTimes, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[dailyTimeEntity])
+	if err != nil {
+		return nil, fmt.Errorf("get channel daily times: %w", err)
+	}
+	return scheduleEntitiesToModels(entities, dailyTimes), nil
 }
 
-func (r *Repository) SetSchedule(ctx context.Context, schedule models.Schedule, keepOverride bool) error {
-	query, args := setScheduleQuery(schedule, keepOverride)
-	rows, err := r.getter.Get(ctx).Query(ctx, query, args)
-	if err != nil {
-		return fmt.Errorf("set channel schedule: %w", err)
-	}
-	_, err = pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[struct {
-		ChannelID int64 `db:"channel_id"`
-	}])
-	if errors.Is(err, pgx.ErrNoRows) {
-		return models.ErrInvalidChannelID
-	}
-	if err != nil {
-		return fmt.Errorf("set channel schedule: %w", err)
+func (r *Repository) SetDailyTime(ctx context.Context, channelID int64, weekday time.Weekday, startsAt time.Duration) error {
+	query, args := setDailyTimeQuery(channelID, weekday, startsAt)
+	return r.execForChannel(ctx, "set channel daily time", query, args)
+}
+
+func (r *Repository) DeleteDailyTime(ctx context.Context, channelID int64, weekday time.Weekday) error {
+	query, args := deleteDailyTimeQuery(channelID, weekday)
+	if _, err := r.getter.Get(ctx).Exec(ctx, query, args); err != nil {
+		return fmt.Errorf("delete channel daily time: %w", err)
 	}
 	return nil
 }
 
+func (r *Repository) SetPostOffset(ctx context.Context, channelID int64, minutes int) error {
+	query, args := setPostOffsetQuery(channelID, minutes)
+	return r.execForChannel(ctx, "set channel post offset", query, args)
+}
+
 func (r *Repository) SetLeadEnabled(ctx context.Context, channelID int64, enabled bool) error {
 	query, args := setLeadEnabledQuery(channelID, enabled)
+	return r.execForChannel(ctx, "set daily lead setting", query, args)
+}
+
+func (r *Repository) ClearScheduleReset(ctx context.Context, channelID int64) error {
+	query, args := clearScheduleResetQuery(channelID)
+	return r.execForChannel(ctx, "clear schedule reset notice", query, args)
+}
+
+func (r *Repository) execForChannel(ctx context.Context, operation, query string, args pgx.NamedArgs) error {
 	rows, err := r.getter.Get(ctx).Query(ctx, query, args)
 	if err != nil {
-		return fmt.Errorf("set daily lead setting: %w", err)
+		return fmt.Errorf("%s: %w", operation, err)
 	}
 	_, err = pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[struct {
 		ChannelID int64 `db:"channel_id"`
@@ -76,7 +94,7 @@ func (r *Repository) SetLeadEnabled(ctx context.Context, channelID int64, enable
 		return models.ErrInvalidChannelID
 	}
 	if err != nil {
-		return fmt.Errorf("set daily lead setting: %w", err)
+		return fmt.Errorf("%s: %w", operation, err)
 	}
 	return nil
 }
@@ -92,24 +110,6 @@ func (r *Repository) SetScheduleCheckedAt(ctx context.Context, channelID int64, 
 	}])
 	if err != nil {
 		return fmt.Errorf("set schedule watermark: %w", err)
-	}
-	return nil
-}
-
-func (r *Repository) SetOverride(ctx context.Context, channelID int64, target time.Time) error {
-	query, args := setOverrideQuery(channelID, target)
-	rows, err := r.getter.Get(ctx).Query(ctx, query, args)
-	if err != nil {
-		return fmt.Errorf("set channel move: %w", err)
-	}
-	_, err = pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[struct {
-		ChannelID int64 `db:"channel_id"`
-	}])
-	if errors.Is(err, pgx.ErrNoRows) {
-		return models.ErrInvalidSchedule
-	}
-	if err != nil {
-		return fmt.Errorf("set channel move: %w", err)
 	}
 	return nil
 }

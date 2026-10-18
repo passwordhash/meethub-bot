@@ -250,6 +250,35 @@ func (mr *MockscheduleSlotRepositoryMockRecorder) Create(arg0, arg1, arg2 any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockscheduleSlotRepository)(nil).Create), arg0, arg1, arg2)
 }
 
+// GetSlots mocks base method.
+func (m *MockscheduleSlotRepository) GetSlots(arg0 context.Context, arg1 models0.GetSlotsFilters) ([]models0.Slot, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSlots", arg0, arg1)
+	ret0, _ := ret[0].([]models0.Slot)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSlots indicates an expected call of GetSlots.
+func (mr *MockscheduleSlotRepositoryMockRecorder) GetSlots(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSlots", reflect.TypeOf((*MockscheduleSlotRepository)(nil).GetSlots), arg0, arg1)
+}
+
+// MarkPublishAlerted mocks base method.
+func (m *MockscheduleSlotRepository) MarkPublishAlerted(arg0 context.Context, arg1 uuid.UUID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkPublishAlerted", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MarkPublishAlerted indicates an expected call of MarkPublishAlerted.
+func (mr *MockscheduleSlotRepositoryMockRecorder) MarkPublishAlerted(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkPublishAlerted", reflect.TypeOf((*MockscheduleSlotRepository)(nil).MarkPublishAlerted), arg0, arg1)
+}
+
 // Recover mocks base method.
 func (m *MockscheduleSlotRepository) Recover(arg0 context.Context) ([]models0.Slot, error) {
 	m.ctrl.T.Helper()

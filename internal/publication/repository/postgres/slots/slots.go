@@ -75,6 +75,18 @@ func (r *Repository) MarkLinkAlerted(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (r *Repository) MarkPublishAlerted(ctx context.Context, id uuid.UUID) error {
+	query, args := markPublishAlertedQuery(id)
+	tag, err := r.getter.Get(ctx).Exec(ctx, query, args)
+	if err != nil {
+		return fmt.Errorf("mark publication failure alert: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errors.New("publication failure alert was not marked")
+	}
+	return nil
+}
+
 func (r *Repository) GetSlotsCount(ctx context.Context, filters models.GetSlotsFilters) (int, error) {
 	query, args := getSlotsCountQuery(filters)
 	rows, err := r.getter.Get(ctx).Query(ctx, query, args)

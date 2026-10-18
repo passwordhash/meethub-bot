@@ -15,6 +15,7 @@ import (
 	time "time"
 
 	models "github.com/passwordhash/cascade-hub-bot/internal/channel/models"
+	models0 "github.com/passwordhash/cascade-hub-bot/internal/publication/models"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -42,6 +43,20 @@ func (m *MockChannelRepository) EXPECT() *MockChannelRepositoryMockRecorder {
 	return m.recorder
 }
 
+// ClearScheduleReset mocks base method.
+func (m *MockChannelRepository) ClearScheduleReset(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClearScheduleReset", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ClearScheduleReset indicates an expected call of ClearScheduleReset.
+func (mr *MockChannelRepositoryMockRecorder) ClearScheduleReset(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearScheduleReset", reflect.TypeOf((*MockChannelRepository)(nil).ClearScheduleReset), arg0, arg1)
+}
+
 // Create mocks base method.
 func (m *MockChannelRepository) Create(arg0 context.Context, arg1 models.Channel) (models.Channel, error) {
 	m.ctrl.T.Helper()
@@ -55,6 +70,20 @@ func (m *MockChannelRepository) Create(arg0 context.Context, arg1 models.Channel
 func (mr *MockChannelRepositoryMockRecorder) Create(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockChannelRepository)(nil).Create), arg0, arg1)
+}
+
+// DeleteDailyTime mocks base method.
+func (m *MockChannelRepository) DeleteDailyTime(arg0 context.Context, arg1 int64, arg2 time.Weekday) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteDailyTime", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteDailyTime indicates an expected call of DeleteDailyTime.
+func (mr *MockChannelRepositoryMockRecorder) DeleteDailyTime(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDailyTime", reflect.TypeOf((*MockChannelRepository)(nil).DeleteDailyTime), arg0, arg1, arg2)
 }
 
 // GetSchedules mocks base method.
@@ -72,6 +101,20 @@ func (mr *MockChannelRepositoryMockRecorder) GetSchedules(arg0, arg1 any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSchedules", reflect.TypeOf((*MockChannelRepository)(nil).GetSchedules), arg0, arg1)
 }
 
+// SetDailyTime mocks base method.
+func (m *MockChannelRepository) SetDailyTime(arg0 context.Context, arg1 int64, arg2 time.Weekday, arg3 time.Duration) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetDailyTime", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetDailyTime indicates an expected call of SetDailyTime.
+func (mr *MockChannelRepositoryMockRecorder) SetDailyTime(arg0, arg1, arg2, arg3 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDailyTime", reflect.TypeOf((*MockChannelRepository)(nil).SetDailyTime), arg0, arg1, arg2, arg3)
+}
+
 // SetLeadEnabled mocks base method.
 func (m *MockChannelRepository) SetLeadEnabled(arg0 context.Context, arg1 int64, arg2 bool) error {
 	m.ctrl.T.Helper()
@@ -86,32 +129,57 @@ func (mr *MockChannelRepositoryMockRecorder) SetLeadEnabled(arg0, arg1, arg2 any
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLeadEnabled", reflect.TypeOf((*MockChannelRepository)(nil).SetLeadEnabled), arg0, arg1, arg2)
 }
 
-// SetOverride mocks base method.
-func (m *MockChannelRepository) SetOverride(arg0 context.Context, arg1 int64, arg2 time.Time) error {
+// SetPostOffset mocks base method.
+func (m *MockChannelRepository) SetPostOffset(arg0 context.Context, arg1 int64, arg2 int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetOverride", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "SetPostOffset", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SetOverride indicates an expected call of SetOverride.
-func (mr *MockChannelRepositoryMockRecorder) SetOverride(arg0, arg1, arg2 any) *gomock.Call {
+// SetPostOffset indicates an expected call of SetPostOffset.
+func (mr *MockChannelRepositoryMockRecorder) SetPostOffset(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetOverride", reflect.TypeOf((*MockChannelRepository)(nil).SetOverride), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPostOffset", reflect.TypeOf((*MockChannelRepository)(nil).SetPostOffset), arg0, arg1, arg2)
 }
 
-// SetSchedule mocks base method.
-func (m *MockChannelRepository) SetSchedule(arg0 context.Context, arg1 models.Schedule, arg2 bool) error {
+// MockslotRepository is a mock of slotRepository interface.
+type MockslotRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockslotRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockslotRepositoryMockRecorder is the mock recorder for MockslotRepository.
+type MockslotRepositoryMockRecorder struct {
+	mock *MockslotRepository
+}
+
+// NewMockslotRepository creates a new mock instance.
+func NewMockslotRepository(ctrl *gomock.Controller) *MockslotRepository {
+	mock := &MockslotRepository{ctrl: ctrl}
+	mock.recorder = &MockslotRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockslotRepository) EXPECT() *MockslotRepositoryMockRecorder {
+	return m.recorder
+}
+
+// GetSlots mocks base method.
+func (m *MockslotRepository) GetSlots(arg0 context.Context, arg1 models0.GetSlotsFilters) ([]models0.Slot, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetSchedule", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "GetSlots", arg0, arg1)
+	ret0, _ := ret[0].([]models0.Slot)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// SetSchedule indicates an expected call of SetSchedule.
-func (mr *MockChannelRepositoryMockRecorder) SetSchedule(arg0, arg1, arg2 any) *gomock.Call {
+// GetSlots indicates an expected call of GetSlots.
+func (mr *MockslotRepositoryMockRecorder) GetSlots(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSchedule", reflect.TypeOf((*MockChannelRepository)(nil).SetSchedule), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSlots", reflect.TypeOf((*MockslotRepository)(nil).GetSlots), arg0, arg1)
 }
 
 // MockupdateProcessor is a mock of updateProcessor interface.
