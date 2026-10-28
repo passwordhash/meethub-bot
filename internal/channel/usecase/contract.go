@@ -21,6 +21,9 @@ type ChannelRepository interface {
 	GetIgnoredUsers(context.Context, models.GetIgnoredUsersFilters) ([]models.IgnoredUser, error)
 	AddIgnoredUser(context.Context, int64, int64) error
 	DeleteIgnoredUser(context.Context, int64, int64) error
+	GetParticipants(context.Context, models.GetParticipantsFilters) ([]models.Participant, error)
+	SetParticipant(context.Context, models.Participant) error
+	DeleteParticipant(context.Context, int64, string) error
 }
 type slotRepository interface {
 	GetSlots(context.Context, pubmodels.GetSlotsFilters) ([]pubmodels.Slot, error)

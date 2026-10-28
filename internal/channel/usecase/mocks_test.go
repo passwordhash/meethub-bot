@@ -114,6 +114,20 @@ func (mr *MockChannelRepositoryMockRecorder) DeleteIgnoredUser(arg0, arg1, arg2 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteIgnoredUser", reflect.TypeOf((*MockChannelRepository)(nil).DeleteIgnoredUser), arg0, arg1, arg2)
 }
 
+// DeleteParticipant mocks base method.
+func (m *MockChannelRepository) DeleteParticipant(arg0 context.Context, arg1 int64, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteParticipant", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteParticipant indicates an expected call of DeleteParticipant.
+func (mr *MockChannelRepositoryMockRecorder) DeleteParticipant(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteParticipant", reflect.TypeOf((*MockChannelRepository)(nil).DeleteParticipant), arg0, arg1, arg2)
+}
+
 // GetIgnoredUsers mocks base method.
 func (m *MockChannelRepository) GetIgnoredUsers(arg0 context.Context, arg1 models.GetIgnoredUsersFilters) ([]models.IgnoredUser, error) {
 	m.ctrl.T.Helper()
@@ -127,6 +141,21 @@ func (m *MockChannelRepository) GetIgnoredUsers(arg0 context.Context, arg1 model
 func (mr *MockChannelRepositoryMockRecorder) GetIgnoredUsers(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIgnoredUsers", reflect.TypeOf((*MockChannelRepository)(nil).GetIgnoredUsers), arg0, arg1)
+}
+
+// GetParticipants mocks base method.
+func (m *MockChannelRepository) GetParticipants(arg0 context.Context, arg1 models.GetParticipantsFilters) ([]models.Participant, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetParticipants", arg0, arg1)
+	ret0, _ := ret[0].([]models.Participant)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetParticipants indicates an expected call of GetParticipants.
+func (mr *MockChannelRepositoryMockRecorder) GetParticipants(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetParticipants", reflect.TypeOf((*MockChannelRepository)(nil).GetParticipants), arg0, arg1)
 }
 
 // GetSchedules mocks base method.
@@ -170,6 +199,20 @@ func (m *MockChannelRepository) SetLeadEnabled(arg0 context.Context, arg1 int64,
 func (mr *MockChannelRepositoryMockRecorder) SetLeadEnabled(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLeadEnabled", reflect.TypeOf((*MockChannelRepository)(nil).SetLeadEnabled), arg0, arg1, arg2)
+}
+
+// SetParticipant mocks base method.
+func (m *MockChannelRepository) SetParticipant(arg0 context.Context, arg1 models.Participant) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetParticipant", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetParticipant indicates an expected call of SetParticipant.
+func (mr *MockChannelRepositoryMockRecorder) SetParticipant(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetParticipant", reflect.TypeOf((*MockChannelRepository)(nil).SetParticipant), arg0, arg1)
 }
 
 // SetPostOffset mocks base method.

@@ -21,10 +21,16 @@ type ChannelUseCase struct {
 	processor  updateProcessor
 	pending    map[int64]pendingInput
 	now        func() time.Time
+	mrBoard    bool
 }
 
 func NewChannelUseCase(ownerID int64, repository ChannelRepository, slots slotRepository, telegram TelegramClient, processor updateProcessor) *ChannelUseCase {
 	return &ChannelUseCase{ownerID: ownerID, repository: repository, slots: slots, telegram: telegram, processor: processor, pending: make(map[int64]pendingInput), now: time.Now}
+}
+
+// EnableMRBoard shows the MR board participants in the channel menu; without GitLab the board is off.
+func (u *ChannelUseCase) EnableMRBoard() {
+	u.mrBoard = true
 }
 
 func (u *ChannelUseCase) Run(ctx context.Context) error {

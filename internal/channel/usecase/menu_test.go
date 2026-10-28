@@ -378,6 +378,72 @@ type menuFixture struct {
 	keyboards  [][][]models.InlineButton
 }
 
+func TestChannelScreenWithMRBoard(t *testing.T) {
+	f := newMenuFixture(t)
+	f.uc.EnableMRBoard()
+	f.expectSchedule(models.Schedule{ChannelID: testChannelID})
+	f.callback("ui:ch:-1001234567890")
+	got := f.lastKeyboard()
+	if row := got[len(got)-2]; row[0].Text != "🧑‍💻 Участники MR" || row[0].CallbackData != "ui:prt:-1001234567890" {
+		t.Fatalf("participants button = %+v", row)
+	}
+}
+
+func TestParticipantsMenuDisabledWithoutGitLab(t *testing.T) {
+	f := newMenuFixture(t)
+	f.telegram.EXPECT().Send(gomock.Any(), int64(1), staleButtonResponse).Return(nil)
+	f.callback("ui:prt:-1001234567890")
+}
+
+func TestParticipantsMenu(t *testing.T) {
+	f := newMenuFixture(t)
+	f.uc.EnableMRBoard()
+	filters := models.GetParticipantsFilters{ChannelID: ptr(testChannelID)}
+	f.repository.EXPECT().GetParticipants(gomock.Any(), filters).Return(nil, nil)
+	f.callback("ui:prt:-1001234567890")
+	if f.lastText != "Участников канала -1001234567890 нет: доска MR для него не ведётся." {
+		t.Fatalf("text = %q", f.lastText)
+	}
+	if got := f.lastKeyboard(); len(got) != 2 || got[0][0].CallbackData != "ui:prta:-1001234567890" || got[1][0].CallbackData != "ui:ch:-1001234567890" {
+		t.Fatalf("empty list keyboard = %+v", got)
+	}
+
+	f.callback("ui:prta:-1001234567890")
+	if got := f.lastKeyboard(); len(got) != 1 || got[0][0].Text != "Отмена" || got[0][0].CallbackData != "ui:prt:-1001234567890" {
+		t.Fatalf("prompt keyboard = %+v", got)
+	}
+	for _, invalid := range []string{"yarik", "Яр @yarik", "a/b @yarik", strings.Repeat("a", 40) + " x", "yarik " + strings.Repeat("я", 65)} {
+		f.telegram.EXPECT().Send(gomock.Any(), int64(1), gomock.Any()).Return(nil)
+		f.send(invalid)
+		if _, waiting := f.uc.pending[1]; !waiting {
+			t.Fatalf("input %q dropped the pending participant", invalid)
+		}
+	}
+	username := strings.Repeat("z", models.MaxGitLabUsernameLength)
+	f.repository.EXPECT().SetParticipant(gomock.Any(), models.Participant{ChannelID: testChannelID, GitLabUsername: "yarik", TelegramLabel: "@yarik Ярослав"}).Return(nil)
+	f.repository.EXPECT().GetParticipants(gomock.Any(), filters).Return([]models.Participant{{ChannelID: testChannelID, GitLabUsername: "yarik", TelegramLabel: "@yarik Ярослав"}, {ChannelID: testChannelID, GitLabUsername: username, TelegramLabel: "Z"}}, nil)
+	f.send(" @Yarik  @yarik Ярослав ")
+	if _, waiting := f.uc.pending[1]; waiting {
+		t.Fatal("pending input survived a valid participant")
+	}
+	got := f.lastKeyboard()
+	if len(got) != 4 || got[0][0].Text != "❌ yarik → @yarik Ярослав" || got[0][0].CallbackData != "ui:prtd:-1001234567890:yarik" {
+		t.Fatalf("list keyboard = %+v", got)
+	}
+	for _, row := range got {
+		if len(row[0].CallbackData) > 64 {
+			t.Errorf("callback data %q exceeds Telegram limit", row[0].CallbackData)
+		}
+	}
+
+	f.repository.EXPECT().DeleteParticipant(gomock.Any(), testChannelID, "yarik").Return(nil)
+	f.repository.EXPECT().GetParticipants(gomock.Any(), filters).Return(nil, nil)
+	f.callback(got[0][0].CallbackData)
+
+	f.telegram.EXPECT().Send(gomock.Any(), int64(1), staleButtonResponse).Return(nil)
+	f.callback("ui:prtd:-1001234567890:BAD!")
+}
+
 func newMenuFixture(t *testing.T) *menuFixture {
 	ctrl := gomock.NewController(t)
 	f := &menuFixture{t: t, repository: NewMockChannelRepository(ctrl), slots: NewMockslotRepository(ctrl), telegram: NewMockTelegramClient(ctrl)}

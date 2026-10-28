@@ -208,6 +208,46 @@ func TestIgnoredUsersPostgres(t *testing.T) {
 	}
 }
 
+func TestParticipantsPostgres(t *testing.T) {
+	ctx := context.Background()
+	db := isolatedDatabase(t)
+	applyMigrations(t, ctx, db, 1, 12)
+	if _, err := db.Exec(ctx, `INSERT INTO channels (channel_id, linked_chat_id) VALUES (-1, -11), (-2, -12)`); err != nil {
+		t.Fatal(err)
+	}
+	repository := New(postgres.NewGetter(db))
+	channelID, otherID := int64(-1), int64(-2)
+	for _, participant := range []models.Participant{
+		{ChannelID: channelID, GitLabUsername: "yarik", TelegramLabel: "Ярик"},
+		{ChannelID: channelID, GitLabUsername: "dima", TelegramLabel: "Дима"},
+		{ChannelID: channelID, GitLabUsername: "yarik", TelegramLabel: "@yarik"},
+		{ChannelID: otherID, GitLabUsername: "yarik", TelegramLabel: "Y"},
+	} {
+		if err := repository.SetParticipant(ctx, participant); err != nil {
+			t.Fatalf("SetParticipant(%+v) = %v", participant, err)
+		}
+	}
+	participants, err := repository.GetParticipants(ctx, models.GetParticipantsFilters{ChannelID: &channelID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []models.Participant{{ChannelID: channelID, GitLabUsername: "yarik", TelegramLabel: "@yarik"}, {ChannelID: channelID, GitLabUsername: "dima", TelegramLabel: "Дима"}}; !reflect.DeepEqual(participants, want) {
+		t.Fatalf("participants = %+v; want %+v", participants, want)
+	}
+	if err := repository.DeleteParticipant(ctx, channelID, "yarik"); err != nil {
+		t.Fatal(err)
+	}
+	if participants, err = repository.GetParticipants(ctx, models.GetParticipantsFilters{}); err != nil || len(participants) != 2 {
+		t.Fatalf("participants after removal = %+v, %v", participants, err)
+	}
+	if err := repository.SetParticipant(ctx, models.Participant{ChannelID: -99, GitLabUsername: "a", TelegramLabel: "A"}); !errors.Is(err, models.ErrInvalidChannelID) {
+		t.Fatalf("participant of an unknown channel = %v", err)
+	}
+	if err := repository.SetParticipant(ctx, models.Participant{ChannelID: channelID, GitLabUsername: "Upper", TelegramLabel: "A"}); err == nil {
+		t.Fatal("mixed-case username was stored")
+	}
+}
+
 func isolatedDatabase(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	connectionString := os.Getenv("REPORT_TEST_DATABASE_URL")
