@@ -10,6 +10,7 @@ var ErrAlreadyConnected = errors.New("channel is already connected to another gr
 var ErrGroupAlreadyConnected = errors.New("group is already connected to another channel")
 var ErrUnverifiablePermissions = errors.New("channel or group permissions could not be verified")
 var ErrTelegramRejected = errors.New("telegram rejected the request")
+var ErrInvalidUserID = errors.New("invalid user id")
 
 type Channel struct {
 	ChannelID int64
@@ -34,6 +35,16 @@ type GetSchedulesFilters struct {
 	ChannelID *int64
 }
 
+type IgnoredUser struct {
+	ChannelID int64
+	UserID    int64
+}
+
+type GetIgnoredUsersFilters struct {
+	ChannelID *int64
+	UserID    *int64
+}
+
 type Permissions struct {
 	ChannelType       string
 	LinkedGroupID     int64
@@ -49,6 +60,13 @@ type Permissions struct {
 func ValidateChannelID(id int64) error {
 	if id >= 0 {
 		return ErrInvalidChannelID
+	}
+	return nil
+}
+
+func ValidateUserID(id int64) error {
+	if id <= 0 {
+		return ErrInvalidUserID
 	}
 	return nil
 }

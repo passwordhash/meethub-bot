@@ -71,6 +71,39 @@ func TestIngestionHandlesAutoForward(t *testing.T) {
 	}
 }
 
+func TestIngestionSkipsIgnoredAuthors(t *testing.T) {
+	publishedAt := time.Unix(1700000010, 0)
+	linkedMessageID := int64(301)
+	channel := channelmodels.Channel{ChannelID: -1001, GroupID: -2002}
+	slot := publicationmodels.Slot{ID: uuid.UUID{1}, ChannelID: channel.ChannelID, State: publicationmodels.StatePublished, LinkedMessageID: &linkedMessageID, PublishedAt: &publishedAt}
+	update := channelmodels.Update{Kind: "message", ChatID: channel.GroupID, ChatType: "supergroup", FromID: 42, FromName: "Grace", MessageID: 400, ReplyToMessageID: linkedMessageID, Date: 1700000000, Text: "report"}
+	tests := []struct {
+		name     string
+		ignored  []channelmodels.IgnoredUser
+		wantSave bool
+	}{
+		{name: "regular author is saved", wantSave: true},
+		{name: "ignored author is dropped", ignored: []channelmodels.IgnoredUser{{ChannelID: channel.ChannelID, UserID: 42}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			channels := NewMockchannelReader(controller)
+			slots := NewMockslotReader(controller)
+			reports := NewMockreportWriter(controller)
+			channels.EXPECT().GetChannels(gomock.Any(), channelmodels.GetChannelsFilters{GroupID: &channel.GroupID}).Return([]channelmodels.Channel{channel}, nil)
+			slots.EXPECT().GetSlots(gomock.Any(), gomock.Any()).Return([]publicationmodels.Slot{slot}, nil)
+			channels.EXPECT().GetIgnoredUsers(gomock.Any(), channelmodels.GetIgnoredUsersFilters{ChannelID: &channel.ChannelID, UserID: &update.FromID}).Return(tt.ignored, nil)
+			if tt.wantSave {
+				reports.EXPECT().SaveFirst(gomock.Any(), gomock.Any()).Return(nil)
+			}
+			if err := NewIngestion(channels, slots, reports).Handle(context.Background(), update); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestReportFromUpdate(t *testing.T) {
 	publishedAt := time.Unix(1700000010, 0)
 	linkedMessageID := int64(301)

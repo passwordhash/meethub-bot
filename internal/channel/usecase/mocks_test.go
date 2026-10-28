@@ -43,6 +43,20 @@ func (m *MockChannelRepository) EXPECT() *MockChannelRepositoryMockRecorder {
 	return m.recorder
 }
 
+// AddIgnoredUser mocks base method.
+func (m *MockChannelRepository) AddIgnoredUser(arg0 context.Context, arg1, arg2 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddIgnoredUser", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddIgnoredUser indicates an expected call of AddIgnoredUser.
+func (mr *MockChannelRepositoryMockRecorder) AddIgnoredUser(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddIgnoredUser", reflect.TypeOf((*MockChannelRepository)(nil).AddIgnoredUser), arg0, arg1, arg2)
+}
+
 // ClearScheduleReset mocks base method.
 func (m *MockChannelRepository) ClearScheduleReset(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -84,6 +98,35 @@ func (m *MockChannelRepository) DeleteDailyTime(arg0 context.Context, arg1 int64
 func (mr *MockChannelRepositoryMockRecorder) DeleteDailyTime(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDailyTime", reflect.TypeOf((*MockChannelRepository)(nil).DeleteDailyTime), arg0, arg1, arg2)
+}
+
+// DeleteIgnoredUser mocks base method.
+func (m *MockChannelRepository) DeleteIgnoredUser(arg0 context.Context, arg1, arg2 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteIgnoredUser", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteIgnoredUser indicates an expected call of DeleteIgnoredUser.
+func (mr *MockChannelRepositoryMockRecorder) DeleteIgnoredUser(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteIgnoredUser", reflect.TypeOf((*MockChannelRepository)(nil).DeleteIgnoredUser), arg0, arg1, arg2)
+}
+
+// GetIgnoredUsers mocks base method.
+func (m *MockChannelRepository) GetIgnoredUsers(arg0 context.Context, arg1 models.GetIgnoredUsersFilters) ([]models.IgnoredUser, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetIgnoredUsers", arg0, arg1)
+	ret0, _ := ret[0].([]models.IgnoredUser)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetIgnoredUsers indicates an expected call of GetIgnoredUsers.
+func (mr *MockChannelRepositoryMockRecorder) GetIgnoredUsers(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIgnoredUsers", reflect.TypeOf((*MockChannelRepository)(nil).GetIgnoredUsers), arg0, arg1)
 }
 
 // GetSchedules mocks base method.

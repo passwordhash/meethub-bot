@@ -164,6 +164,50 @@ func TestScheduleEditsPostgres(t *testing.T) {
 	}
 }
 
+func TestIgnoredUsersPostgres(t *testing.T) {
+	ctx := context.Background()
+	db := isolatedDatabase(t)
+	applyMigrations(t, ctx, db, 1, 11)
+	if _, err := db.Exec(ctx, `INSERT INTO channels (channel_id, linked_chat_id) VALUES (-1, -11), (-2, -12)`); err != nil {
+		t.Fatal(err)
+	}
+	repository := New(postgres.NewGetter(db))
+	channelID, otherID := int64(-1), int64(-2)
+	for _, entry := range []struct{ channelID, userID int64 }{{channelID, 42}, {channelID, 7}, {channelID, 42}, {otherID, 42}} {
+		if err := repository.AddIgnoredUser(ctx, entry.channelID, entry.userID); err != nil {
+			t.Fatalf("AddIgnoredUser(%d, %d) = %v", entry.channelID, entry.userID, err)
+		}
+	}
+	users, err := repository.GetIgnoredUsers(ctx, models.GetIgnoredUsersFilters{ChannelID: &channelID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []models.IgnoredUser{{ChannelID: channelID, UserID: 42}, {ChannelID: channelID, UserID: 7}}; !reflect.DeepEqual(users, want) {
+		t.Fatalf("ignored users = %+v; want %+v", users, want)
+	}
+	userID := int64(7)
+	if err := repository.DeleteIgnoredUser(ctx, channelID, userID); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.DeleteIgnoredUser(ctx, channelID, userID); err != nil {
+		t.Fatalf("deleting an absent user: %v", err)
+	}
+	users, err = repository.GetIgnoredUsers(ctx, models.GetIgnoredUsersFilters{ChannelID: &channelID, UserID: &userID})
+	if err != nil || len(users) != 0 {
+		t.Fatalf("deleted user lookup = %+v, %v", users, err)
+	}
+	ignored := int64(42)
+	if users, err = repository.GetIgnoredUsers(ctx, models.GetIgnoredUsersFilters{UserID: &ignored}); err != nil || len(users) != 2 {
+		t.Fatalf("other channel list was affected: %+v, %v", users, err)
+	}
+	if err := repository.AddIgnoredUser(ctx, -99, 42); !errors.Is(err, models.ErrInvalidChannelID) {
+		t.Fatalf("ignoring a user of an unknown channel = %v", err)
+	}
+	if err := repository.AddIgnoredUser(ctx, channelID, 0); err == nil {
+		t.Fatal("non-positive user id was stored")
+	}
+}
+
 func isolatedDatabase(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	connectionString := os.Getenv("REPORT_TEST_DATABASE_URL")

@@ -82,6 +82,36 @@ func (r *Repository) ClearScheduleReset(ctx context.Context, channelID int64) er
 	return r.execForChannel(ctx, "clear schedule reset notice", query, args)
 }
 
+func (r *Repository) GetIgnoredUsers(ctx context.Context, filters models.GetIgnoredUsersFilters) ([]models.IgnoredUser, error) {
+	query, args := getIgnoredUsersQuery(filters)
+	rows, err := r.getter.Get(ctx).Query(ctx, query, args)
+	if err != nil {
+		return nil, fmt.Errorf("get ignored users: %w", err)
+	}
+	entities, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[ignoredUserEntity])
+	if err != nil {
+		return nil, fmt.Errorf("get ignored users: %w", err)
+	}
+	users := make([]models.IgnoredUser, 0, len(entities))
+	for _, entity := range entities {
+		users = append(users, ignoredUserEntityToModel(entity))
+	}
+	return users, nil
+}
+
+func (r *Repository) AddIgnoredUser(ctx context.Context, channelID, userID int64) error {
+	query, args := addIgnoredUserQuery(channelID, userID)
+	return r.execForChannel(ctx, "add ignored user", query, args)
+}
+
+func (r *Repository) DeleteIgnoredUser(ctx context.Context, channelID, userID int64) error {
+	query, args := deleteIgnoredUserQuery(channelID, userID)
+	if _, err := r.getter.Get(ctx).Exec(ctx, query, args); err != nil {
+		return fmt.Errorf("delete ignored user: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) execForChannel(ctx context.Context, operation, query string, args pgx.NamedArgs) error {
 	rows, err := r.getter.Get(ctx).Query(ctx, query, args)
 	if err != nil {

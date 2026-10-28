@@ -59,6 +59,21 @@ func (mr *MockchannelReaderMockRecorder) GetChannels(arg0, arg1 any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetChannels", reflect.TypeOf((*MockchannelReader)(nil).GetChannels), arg0, arg1)
 }
 
+// GetIgnoredUsers mocks base method.
+func (m *MockchannelReader) GetIgnoredUsers(arg0 context.Context, arg1 models.GetIgnoredUsersFilters) ([]models.IgnoredUser, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetIgnoredUsers", arg0, arg1)
+	ret0, _ := ret[0].([]models.IgnoredUser)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetIgnoredUsers indicates an expected call of GetIgnoredUsers.
+func (mr *MockchannelReaderMockRecorder) GetIgnoredUsers(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIgnoredUsers", reflect.TypeOf((*MockchannelReader)(nil).GetIgnoredUsers), arg0, arg1)
+}
+
 // MockslotReader is a mock of slotReader interface.
 type MockslotReader struct {
 	ctrl     *gomock.Controller

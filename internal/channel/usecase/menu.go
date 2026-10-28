@@ -18,8 +18,9 @@ import (
 type pendingKind int
 
 const (
-	pendingDailyTime  pendingKind = 1
-	pendingPostOffset pendingKind = 2
+	pendingDailyTime   pendingKind = 1
+	pendingPostOffset  pendingKind = 2
+	pendingIgnoredUser pendingKind = 3
 )
 
 type pendingInput struct {
@@ -37,6 +38,9 @@ const (
 	actionOffsetPreset  = "offp"
 	actionOffsetCustom  = "offc"
 	actionLead          = "host"
+	actionIgnored       = "ign"
+	actionIgnoreAdd     = "igna"
+	actionIgnoreRemove  = "ignd"
 	staleButtonResponse = "Эта кнопка устарела. Откройте /start."
 )
 
@@ -48,6 +52,9 @@ var callbackArgumentCounts = map[string]int{
 	actionOffsetPreset: 1,
 	actionOffsetCustom: 0,
 	actionLead:         1,
+	actionIgnored:      0,
+	actionIgnoreAdd:    0,
+	actionIgnoreRemove: 1,
 }
 
 var weekdaysFromMonday = []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday, time.Saturday, time.Sunday}
@@ -89,7 +96,7 @@ func (u *ChannelUseCase) sendChannelScreen(ctx context.Context, chatID, channelI
 	if notice != "" {
 		text = notice + "\n\n" + text
 	}
-	keyboard := make([][]models.InlineButton, 0, len(weekdaysFromMonday)+3)
+	keyboard := make([][]models.InlineButton, 0, len(weekdaysFromMonday)+4)
 	for _, weekday := range weekdaysFromMonday {
 		startsAt := "—"
 		if dailyTime, scheduled := schedule.DailyTimes[weekday]; scheduled {
@@ -104,6 +111,7 @@ func (u *ChannelUseCase) sendChannelScreen(ctx context.Context, chatID, channelI
 	keyboard = append(keyboard,
 		[]models.InlineButton{{Text: fmt.Sprintf("⏱ Пост за %d мин", schedule.PostOffsetMinutes), CallbackData: callbackData(actionOffset, channelID)}},
 		[]models.InlineButton{{Text: leadText, CallbackData: callbackData(actionLead, channelID, leadTarget)}},
+		[]models.InlineButton{{Text: "🚫 Игнор-лист", CallbackData: callbackData(actionIgnored, channelID)}},
 		[]models.InlineButton{{Text: "⬅️ Каналы", CallbackData: "ui:" + actionList}},
 	)
 	return u.telegram.SendKeyboard(ctx, chatID, text, keyboard)
@@ -153,6 +161,14 @@ func (u *ChannelUseCase) handleCallback(ctx context.Context, update models.Updat
 		return u.telegram.SendKeyboard(ctx, chatID, fmt.Sprintf("Отправьте целое число минут от 0 до %d: за сколько до дейлика выйдет пост.", models.MaxPostOffsetMinutes), [][]models.InlineButton{{cancelButton(channelID)}})
 	case actionLead:
 		return u.setLeadFromButton(ctx, chatID, channelID, arguments[0])
+	case actionIgnored:
+		return u.sendIgnoredUsers(ctx, chatID, channelID)
+	case actionIgnoreAdd:
+		u.pending[chatID] = pendingInput{kind: pendingIgnoredUser, channelID: channelID}
+		back := models.InlineButton{Text: "Отмена", CallbackData: callbackData(actionIgnored, channelID)}
+		return u.telegram.SendKeyboard(ctx, chatID, "Отправьте Telegram ID пользователя (целое положительное число), чьи отчёты бот не будет учитывать.", [][]models.InlineButton{{back}})
+	case actionIgnoreRemove:
+		return u.removeIgnoredUser(ctx, chatID, channelID, arguments[0])
 	}
 	return u.telegram.Send(ctx, chatID, staleButtonResponse)
 }
@@ -234,6 +250,45 @@ func (u *ChannelUseCase) setLeadFromButton(ctx context.Context, chatID, channelI
 	return u.sendChannelScreen(ctx, chatID, channelID, "")
 }
 
+func (u *ChannelUseCase) sendIgnoredUsers(ctx context.Context, chatID, channelID int64) error {
+	users, err := u.repository.GetIgnoredUsers(ctx, models.GetIgnoredUsersFilters{ChannelID: &channelID})
+	if err != nil {
+		return u.failChannelAction(ctx, chatID, channelID, err, "Не удалось прочитать игнор-лист.")
+	}
+	text := fmt.Sprintf("Игнор-лист канала %d: отчёты этих пользователей не попадают в сводку и выбор ведущего. Нажмите на ID, чтобы убрать его из списка.", channelID)
+	if len(users) == 0 {
+		text = fmt.Sprintf("Игнор-лист канала %d пуст.", channelID)
+	}
+	keyboard := make([][]models.InlineButton, 0, len(users)+2)
+	for _, user := range users {
+		userID := strconv.FormatInt(user.UserID, 10)
+		keyboard = append(keyboard, []models.InlineButton{{Text: "❌ " + userID, CallbackData: callbackData(actionIgnoreRemove, channelID, userID)}})
+	}
+	keyboard = append(keyboard,
+		[]models.InlineButton{{Text: "➕ Добавить", CallbackData: callbackData(actionIgnoreAdd, channelID)}},
+		[]models.InlineButton{{Text: "⬅️ Назад", CallbackData: callbackData(actionChannel, channelID)}},
+	)
+	return u.telegram.SendKeyboard(ctx, chatID, text, keyboard)
+}
+
+func (u *ChannelUseCase) removeIgnoredUser(ctx context.Context, chatID, channelID int64, userIDText string) error {
+	userID, err := strconv.ParseInt(userIDText, 10, 64)
+	if err != nil || models.ValidateUserID(userID) != nil {
+		return u.telegram.Send(ctx, chatID, staleButtonResponse)
+	}
+	if err := u.repository.DeleteIgnoredUser(ctx, channelID, userID); err != nil {
+		return u.failChannelAction(ctx, chatID, channelID, err, "Не удалось убрать пользователя из игнор-листа.")
+	}
+	return u.sendIgnoredUsers(ctx, chatID, channelID)
+}
+
+func (u *ChannelUseCase) addIgnoredUser(ctx context.Context, chatID, channelID, userID int64) error {
+	if err := u.repository.AddIgnoredUser(ctx, channelID, userID); err != nil {
+		return u.failChannelAction(ctx, chatID, channelID, err, "Не удалось добавить пользователя в игнор-лист.")
+	}
+	return u.sendIgnoredUsers(ctx, chatID, channelID)
+}
+
 func (u *ChannelUseCase) handlePendingInput(ctx context.Context, chatID int64, input pendingInput, text string) error {
 	switch input.kind {
 	case pendingDailyTime:
@@ -243,6 +298,13 @@ func (u *ChannelUseCase) handlePendingInput(ctx context.Context, chatID int64, i
 		}
 		delete(u.pending, chatID)
 		return u.saveDailyTime(ctx, chatID, input, startsAt)
+	case pendingIgnoredUser:
+		userID, err := strconv.ParseInt(text, 10, 64)
+		if err != nil || models.ValidateUserID(userID) != nil {
+			return u.telegram.Send(ctx, chatID, "Некорректный ID. Отправьте Telegram ID пользователя целым положительным числом, например 123456789.")
+		}
+		delete(u.pending, chatID)
+		return u.addIgnoredUser(ctx, chatID, input.channelID, userID)
 	default:
 		minutes, err := strconv.Atoi(text)
 		if err != nil || models.ValidatePostOffset(minutes) != nil {

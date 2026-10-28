@@ -20,3 +20,8 @@ type dailyTimeEntity struct {
 	Weekday         int16 `db:"weekday"`
 	StartsAtMinutes int   `db:"starts_at_minutes"`
 }
+
+type ignoredUserEntity struct {
+	ChannelID int64 `db:"channel_id"`
+	UserID    int64 `db:"user_id"`
+}

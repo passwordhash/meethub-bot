@@ -69,6 +69,13 @@ func (u *Ingestion) Handle(ctx context.Context, update channelmodels.Update) err
 	if !ok || !eligible {
 		return nil
 	}
+	ignored, err := u.channels.GetIgnoredUsers(ctx, channelmodels.GetIgnoredUsersFilters{ChannelID: &channels[0].ChannelID, UserID: &report.AuthorID})
+	if err != nil {
+		return err
+	}
+	if len(ignored) > 0 {
+		return nil
+	}
 	return u.reports.SaveFirst(ctx, report)
 }
 

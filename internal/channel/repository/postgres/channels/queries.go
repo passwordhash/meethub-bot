@@ -97,6 +97,37 @@ UPDATE channels SET schedule_checked_at = @checked_at WHERE channel_id = @channe
 RETURNING channel_id`, pgx.NamedArgs{"channel_id": channelID, "checked_at": checkedAt}
 }
 
+func getIgnoredUsersQuery(filters models.GetIgnoredUsersFilters) (string, pgx.NamedArgs) {
+	conditions := []string{"1 = 1"}
+	args := pgx.NamedArgs{}
+	if filters.ChannelID != nil {
+		conditions = append(conditions, "channel_id = @channel_id")
+		args["channel_id"] = *filters.ChannelID
+	}
+	if filters.UserID != nil {
+		conditions = append(conditions, "user_id = @user_id")
+		args["user_id"] = *filters.UserID
+	}
+	return "-- getIgnoredUsersQuery\nSELECT channel_id, user_id FROM channel_ignored_users WHERE " + strings.Join(conditions, " AND ") + "\nORDER BY created_at, user_id", args
+}
+
+func addIgnoredUserQuery(channelID, userID int64) (string, pgx.NamedArgs) {
+	return `-- addIgnoredUserQuery
+WITH channel AS (
+    SELECT channel_id FROM channels WHERE channel_id = @channel_id
+), inserted AS (
+    INSERT INTO channel_ignored_users (channel_id, user_id)
+    SELECT channel_id, @user_id FROM channel
+    ON CONFLICT (channel_id, user_id) DO NOTHING
+)
+SELECT channel_id FROM channel`, pgx.NamedArgs{"channel_id": channelID, "user_id": userID}
+}
+
+func deleteIgnoredUserQuery(channelID, userID int64) (string, pgx.NamedArgs) {
+	return `-- deleteIgnoredUserQuery
+DELETE FROM channel_ignored_users WHERE channel_id = @channel_id AND user_id = @user_id`, pgx.NamedArgs{"channel_id": channelID, "user_id": userID}
+}
+
 func getConnectionConflictQuery(channel models.Channel) (string, pgx.NamedArgs) {
 	return `-- getConnectionConflictQuery
 SELECT channel_id, linked_chat_id

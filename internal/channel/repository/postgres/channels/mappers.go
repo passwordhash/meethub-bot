@@ -31,3 +31,7 @@ func scheduleEntitiesToModels(entities []scheduleEntity, dailyTimes []dailyTimeE
 	}
 	return schedules
 }
+
+func ignoredUserEntityToModel(entity ignoredUserEntity) models.IgnoredUser {
+	return models.IgnoredUser{ChannelID: entity.ChannelID, UserID: entity.UserID}
+}

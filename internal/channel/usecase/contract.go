@@ -18,6 +18,9 @@ type ChannelRepository interface {
 	SetPostOffset(context.Context, int64, int) error
 	SetLeadEnabled(context.Context, int64, bool) error
 	ClearScheduleReset(context.Context, int64) error
+	GetIgnoredUsers(context.Context, models.GetIgnoredUsersFilters) ([]models.IgnoredUser, error)
+	AddIgnoredUser(context.Context, int64, int64) error
+	DeleteIgnoredUser(context.Context, int64, int64) error
 }
 type slotRepository interface {
 	GetSlots(context.Context, pubmodels.GetSlotsFilters) ([]pubmodels.Slot, error)

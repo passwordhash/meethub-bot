@@ -13,6 +13,7 @@ import (
 
 type channelReader interface {
 	GetChannels(context.Context, channelmodels.GetChannelsFilters) ([]channelmodels.Channel, error)
+	GetIgnoredUsers(context.Context, channelmodels.GetIgnoredUsersFilters) ([]channelmodels.IgnoredUser, error)
 }
 
 type slotReader interface {

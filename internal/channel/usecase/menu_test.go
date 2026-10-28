@@ -41,12 +41,12 @@ func TestChannelScreen(t *testing.T) {
 			schedule: models.Schedule{ChannelID: testChannelID, PostOffsetMinutes: 60, LeadEnabled: true, DailyTimes: map[time.Weekday]time.Duration{
 				time.Monday: 10 * time.Hour, time.Wednesday: 12*time.Hour + 30*time.Minute, time.Friday: 10 * time.Hour,
 			}},
-			want: []string{"Пн · 10:00", "Вт · —", "Ср · 12:30", "Чт · —", "Пт · 10:00", "Сб · —", "Вс · —", "⏱ Пост за 60 мин", "👤 Ведущий: вкл.", "⬅️ Каналы"},
+			want: []string{"Пн · 10:00", "Вт · —", "Ср · 12:30", "Чт · —", "Пт · 10:00", "Сб · —", "Вс · —", "⏱ Пост за 60 мин", "👤 Ведущий: вкл.", "🚫 Игнор-лист", "⬅️ Каналы"},
 		},
 		{
 			name:     "empty grid lead off",
 			schedule: models.Schedule{ChannelID: testChannelID, PostOffsetMinutes: 0},
-			want:     []string{"Пн · —", "Вт · —", "Ср · —", "Чт · —", "Пт · —", "Сб · —", "Вс · —", "⏱ Пост за 0 мин", "👤 Ведущий: выкл.", "⬅️ Каналы"},
+			want:     []string{"Пн · —", "Вт · —", "Ср · —", "Чт · —", "Пт · —", "Сб · —", "Вс · —", "⏱ Пост за 0 мин", "👤 Ведущий: выкл.", "🚫 Игнор-лист", "⬅️ Каналы"},
 		},
 	}
 	for _, tt := range tests {
@@ -137,6 +137,16 @@ func TestInvalidInputKeepsWaiting(t *testing.T) {
 			expect: func(f *menuFixture) {
 				f.repository.EXPECT().SetDailyTime(gomock.Any(), testChannelID, time.Wednesday, 23*time.Hour+59*time.Minute).Return(nil)
 				f.slots.EXPECT().GetSlots(gomock.Any(), gomock.Any()).Return(nil, nil)
+			},
+		},
+		{
+			name:     "ignored user",
+			callback: "ui:igna:-1001234567890",
+			invalid:  []string{"0", "-5", "abc", "1.5", "@user"},
+			valid:    "777",
+			expect: func(f *menuFixture) {
+				f.repository.EXPECT().AddIgnoredUser(gomock.Any(), testChannelID, int64(777)).Return(nil)
+				f.repository.EXPECT().GetIgnoredUsers(gomock.Any(), gomock.Any()).Return(nil, nil)
 			},
 		},
 		{
@@ -237,6 +247,51 @@ func TestLeadToggle(t *testing.T) {
 	}
 }
 
+func TestIgnoredUsersMenu(t *testing.T) {
+	f := newMenuFixture(t)
+	filters := models.GetIgnoredUsersFilters{ChannelID: ptr(testChannelID)}
+	f.repository.EXPECT().GetIgnoredUsers(gomock.Any(), filters).Return(nil, nil)
+	f.callback("ui:ign:-1001234567890")
+	if f.lastText != "Игнор-лист канала -1001234567890 пуст." {
+		t.Fatalf("text = %q", f.lastText)
+	}
+	if got := f.lastKeyboard(); len(got) != 2 || got[0][0].CallbackData != "ui:igna:-1001234567890" || got[1][0].CallbackData != "ui:ch:-1001234567890" {
+		t.Fatalf("empty list keyboard = %+v", got)
+	}
+
+	f.callback("ui:igna:-1001234567890")
+	if got := f.lastKeyboard(); len(got) != 1 || got[0][0].Text != "Отмена" || got[0][0].CallbackData != "ui:ign:-1001234567890" {
+		t.Fatalf("prompt keyboard = %+v", got)
+	}
+	f.repository.EXPECT().AddIgnoredUser(gomock.Any(), testChannelID, int64(9876543210)).Return(nil)
+	f.repository.EXPECT().GetIgnoredUsers(gomock.Any(), filters).Return([]models.IgnoredUser{{ChannelID: testChannelID, UserID: 42}, {ChannelID: testChannelID, UserID: 9876543210}}, nil)
+	f.send(" 9876543210 ")
+	if _, waiting := f.uc.pending[1]; waiting {
+		t.Fatal("pending input survived a valid user id")
+	}
+	got := f.lastKeyboard()
+	if len(got) != 4 || got[0][0].Text != "❌ 42" || got[0][0].CallbackData != "ui:ignd:-1001234567890:42" || got[1][0].CallbackData != "ui:ignd:-1001234567890:9876543210" {
+		t.Fatalf("list keyboard = %+v", got)
+	}
+	for _, row := range got {
+		if len(row[0].CallbackData) > 64 {
+			t.Errorf("callback data %q exceeds Telegram limit", row[0].CallbackData)
+		}
+	}
+
+	f.repository.EXPECT().DeleteIgnoredUser(gomock.Any(), testChannelID, int64(42)).Return(nil)
+	f.repository.EXPECT().GetIgnoredUsers(gomock.Any(), filters).Return([]models.IgnoredUser{{ChannelID: testChannelID, UserID: 9876543210}}, nil)
+	f.callback(got[0][0].CallbackData)
+	if got := f.lastKeyboard(); len(got) != 3 || got[0][0].Text != "❌ 9876543210" {
+		t.Fatalf("list after removal = %+v", got)
+	}
+
+	f.repository.EXPECT().AddIgnoredUser(gomock.Any(), testChannelID, int64(5)).Return(models.ErrInvalidChannelID)
+	f.telegram.EXPECT().Send(gomock.Any(), int64(1), "Канал больше не подключён.").Return(nil)
+	f.callback("ui:igna:-1001234567890")
+	f.send("5")
+}
+
 func TestPendingInputResets(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -272,7 +327,7 @@ func TestPendingInputResets(t *testing.T) {
 }
 
 func TestStaleAndMalformedButtons(t *testing.T) {
-	tests := []string{"ui:menu", "ui:schedule", "ui:schedule:-1001234567890", "ui:lead", "ui:lead:-1001234567890:on", "ui:cancel", "ui:day:-1001234567890", "ui:day:1:2", "ui:ch:abc", "ui:host:-1001234567890:maybe", "ui:day:-1001234567890:9", "ui:offp:-1001234567890:1440", "other", ""}
+	tests := []string{"ui:menu", "ui:schedule", "ui:schedule:-1001234567890", "ui:lead", "ui:lead:-1001234567890:on", "ui:cancel", "ui:day:-1001234567890", "ui:day:1:2", "ui:ch:abc", "ui:host:-1001234567890:maybe", "ui:day:-1001234567890:9", "ui:offp:-1001234567890:1440", "ui:ign:-1001234567890:1", "ui:ignd:-1001234567890", "ui:ignd:-1001234567890:0", "ui:ignd:-1001234567890:abc", "other", ""}
 	for _, data := range tests {
 		t.Run(data, func(t *testing.T) {
 			f := newMenuFixture(t)
