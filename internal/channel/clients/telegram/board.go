@@ -5,16 +5,15 @@ import (
 	"errors"
 )
 
-// richMessage is the Bot API 10.1 rich message body; "markdown" follows GitHub Flavored Markdown.
+// richMessage is the Bot API 10.1 rich message body; its markdown follows GitHub Flavored Markdown.
 type richMessage struct {
-	Format  string `json:"format"`
-	Content string `json:"content"`
+	Markdown string `json:"markdown"`
 }
 
 // SendBoard posts the MR board as a rich Markdown message, silently: it is a status message, not a notification.
 func (c *Client) SendBoard(ctx context.Context, groupID int64, text string) (int64, error) {
 	return c.sendMessage(ctx, "sendRichMessage", map[string]any{
-		"chat_id": groupID, "rich_message": richMessage{Format: "markdown", Content: text},
+		"chat_id": groupID, "rich_message": richMessage{Markdown: text},
 		"disable_notification": true, "link_preview_options": map[string]bool{"is_disabled": true},
 	})
 }
@@ -22,7 +21,7 @@ func (c *Client) SendBoard(ctx context.Context, groupID int64, text string) (int
 // EditBoard rewrites the rich board in place; an unchanged text counts as success so a retried edit does not look like a lost board.
 func (c *Client) EditBoard(ctx context.Context, groupID, messageID int64, text string) error {
 	err := c.call(ctx, "editMessageText", map[string]any{
-		"chat_id": groupID, "message_id": messageID, "rich_message": richMessage{Format: "markdown", Content: text},
+		"chat_id": groupID, "message_id": messageID, "rich_message": richMessage{Markdown: text},
 		"link_preview_options": map[string]bool{"is_disabled": true},
 	}, nil)
 	if errors.Is(err, ErrMessageNotModified) {
