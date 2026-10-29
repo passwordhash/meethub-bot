@@ -10,6 +10,9 @@ import (
 	"github.com/passwordhash/cascade-hub-bot/internal/channel/repository/postgres/channels"
 	"github.com/passwordhash/cascade-hub-bot/internal/channel/usecase"
 	"github.com/passwordhash/cascade-hub-bot/internal/config"
+	"github.com/passwordhash/cascade-hub-bot/internal/mrboard/clients/gitlab"
+	"github.com/passwordhash/cascade-hub-bot/internal/mrboard/repository/postgres/boards"
+	mrBoardUseCase "github.com/passwordhash/cascade-hub-bot/internal/mrboard/usecase"
 	"github.com/passwordhash/cascade-hub-bot/internal/postgres"
 	publicationSlots "github.com/passwordhash/cascade-hub-bot/internal/publication/repository/postgres/slots"
 	publicationSummary "github.com/passwordhash/cascade-hub-bot/internal/publication/repository/postgres/summary"
@@ -23,6 +26,7 @@ import (
 type App struct {
 	channelUseCase *usecase.ChannelUseCase
 	lifecycle      *publicationUseCase.LifecycleUseCase
+	board          *mrBoardUseCase.BoardUseCase
 	pool           *pgxpool.Pool
 }
 
@@ -72,18 +76,32 @@ func New(ctx context.Context) (*App, error) {
 		pool.Close()
 		return nil, fmt.Errorf("create publication lifecycle: %w", err)
 	}
-	return &App{channelUseCase: channelUseCase, lifecycle: lifecycle, pool: pool}, nil
+	var board *mrBoardUseCase.BoardUseCase
+	if cfg.GitLab.Enabled() {
+		gitLabClient := gitlab.New(cfg.GitLab.URL, cfg.GitLab.Token, cfg.GitLab.Group)
+		board, err = mrBoardUseCase.NewBoardUseCase(gitLabClient, channelRepository, boards.New(getter), telegramClient, notifier, cfg.GitLab.PollInterval)
+		if err != nil {
+			pool.Close()
+			return nil, fmt.Errorf("create MR board: %w", err)
+		}
+		channelUseCase.EnableMRBoard()
+	}
+	return &App{channelUseCase: channelUseCase, lifecycle: lifecycle, board: board, pool: pool}, nil
 }
 
 func (a *App) Run(ctx context.Context) error {
 	defer a.pool.Close()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	errors := make(chan error, 2)
+	errors := make(chan error, 3)
 	var workers sync.WaitGroup
 	workers.Add(2)
 	go func() { defer workers.Done(); errors <- a.channelUseCase.Run(ctx) }()
 	go func() { defer workers.Done(); errors <- a.lifecycle.Run(ctx) }()
+	if a.board != nil {
+		workers.Add(1)
+		go func() { defer workers.Done(); errors <- a.board.Run(ctx) }()
+	}
 	firstError := <-errors
 	cancel()
 	workers.Wait()

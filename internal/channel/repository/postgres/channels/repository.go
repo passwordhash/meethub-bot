@@ -112,6 +112,36 @@ func (r *Repository) DeleteIgnoredUser(ctx context.Context, channelID, userID in
 	return nil
 }
 
+func (r *Repository) GetParticipants(ctx context.Context, filters models.GetParticipantsFilters) ([]models.Participant, error) {
+	query, args := getParticipantsQuery(filters)
+	rows, err := r.getter.Get(ctx).Query(ctx, query, args)
+	if err != nil {
+		return nil, fmt.Errorf("get participants: %w", err)
+	}
+	entities, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[participantEntity])
+	if err != nil {
+		return nil, fmt.Errorf("get participants: %w", err)
+	}
+	participants := make([]models.Participant, 0, len(entities))
+	for _, entity := range entities {
+		participants = append(participants, participantEntityToModel(entity))
+	}
+	return participants, nil
+}
+
+func (r *Repository) SetParticipant(ctx context.Context, participant models.Participant) error {
+	query, args := setParticipantQuery(participant)
+	return r.execForChannel(ctx, "set participant", query, args)
+}
+
+func (r *Repository) DeleteParticipant(ctx context.Context, channelID int64, gitLabUsername string) error {
+	query, args := deleteParticipantQuery(channelID, gitLabUsername)
+	if _, err := r.getter.Get(ctx).Exec(ctx, query, args); err != nil {
+		return fmt.Errorf("delete participant: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) execForChannel(ctx context.Context, operation, query string, args pgx.NamedArgs) error {
 	rows, err := r.getter.Get(ctx).Query(ctx, query, args)
 	if err != nil {

@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	ErrAPI               = errors.New("telegram API request failed")
-	ErrTelegramRejected  = models.ErrTelegramRejected
-	ErrTelegramUncertain = errors.New("telegram request outcome is uncertain")
+	ErrAPI                = errors.New("telegram API request failed")
+	ErrTelegramRejected   = models.ErrTelegramRejected
+	ErrTelegramUncertain  = errors.New("telegram request outcome is uncertain")
+	ErrMessageNotModified = errors.New("telegram message is not modified")
 )
 
 type Client struct {
@@ -26,15 +27,17 @@ type Client struct {
 }
 
 type envelope struct {
-	OK     bool            `json:"ok"`
-	Result json.RawMessage `json:"result"`
+	OK          bool            `json:"ok"`
+	Result      json.RawMessage `json:"result"`
+	Description string          `json:"description"`
 }
 
 type chat struct {
-	ID           int64  `json:"id"`
-	Type         string `json:"type"`
-	LinkedChatID int64
-	Permissions  struct{ CanSendMessages bool } `json:"permissions"`
+	ID              int64  `json:"id"`
+	Type            string `json:"type"`
+	LinkedChatID    int64
+	PinnedMessageID int64
+	Permissions     struct{ CanSendMessages, CanPinMessages bool } `json:"permissions"`
 }
 
 func (c *chat) UnmarshalJSON(data []byte) error {
@@ -50,11 +53,21 @@ func (c *chat) UnmarshalJSON(data []byte) error {
 	if err := unmarshalOptional(fields["linked_chat_id"], &decoded.LinkedChatID); err != nil {
 		return err
 	}
+	var pinned map[string]json.RawMessage
+	if err := unmarshalOptional(fields["pinned_message"], &pinned); err != nil {
+		return err
+	}
+	if err := unmarshalOptional(pinned["message_id"], &decoded.PinnedMessageID); err != nil {
+		return err
+	}
 	var permissions map[string]json.RawMessage
 	if err := unmarshalOptional(fields["permissions"], &permissions); err != nil {
 		return err
 	}
 	if err := unmarshalOptional(permissions["can_send_messages"], &decoded.Permissions.CanSendMessages); err != nil {
+		return err
+	}
+	if err := unmarshalOptional(permissions["can_pin_messages"], &decoded.Permissions.CanPinMessages); err != nil {
 		return err
 	}
 	*c = chat(decoded)
@@ -65,6 +78,7 @@ type member struct {
 	Status   string `json:"status"`
 	CanPost  bool
 	CanSend  *bool
+	CanPin   *bool
 	IsMember bool
 }
 
@@ -80,6 +94,9 @@ func (m *member) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if err := unmarshalOptional(fields["can_send_messages"], &m.CanSend); err != nil {
+		return err
+	}
+	if err := unmarshalOptional(fields["can_pin_messages"], &m.CanPin); err != nil {
 		return err
 	}
 	if err := unmarshalOptional(fields["is_member"], &m.IsMember); err != nil {
@@ -310,7 +327,15 @@ func (c *Client) call(ctx context.Context, method string, input, output any) err
 	if json.Unmarshal(data, &result) != nil {
 		return errors.Join(ErrAPI, ErrTelegramUncertain)
 	}
+	if response.StatusCode == http.StatusBadRequest && !result.OK && strings.Contains(result.Description, "message is not modified") {
+		return errors.Join(ErrAPI, ErrTelegramRejected, ErrMessageNotModified)
+	}
 	if response.StatusCode >= 400 && response.StatusCode < 500 && !result.OK {
+		if response.StatusCode == http.StatusBadRequest &&
+			((method == "editMessageText" && strings.Contains(result.Description, "message to edit not found")) ||
+				(method == "pinChatMessage" && strings.Contains(result.Description, "message to pin not found"))) {
+			return errors.Join(ErrAPI, ErrTelegramRejected, models.ErrBoardMessageMissing)
+		}
 		return errors.Join(ErrAPI, ErrTelegramRejected)
 	}
 	if response.StatusCode != http.StatusOK || !result.OK {

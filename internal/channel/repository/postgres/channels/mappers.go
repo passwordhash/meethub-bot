@@ -35,3 +35,7 @@ func scheduleEntitiesToModels(entities []scheduleEntity, dailyTimes []dailyTimeE
 func ignoredUserEntityToModel(entity ignoredUserEntity) models.IgnoredUser {
 	return models.IgnoredUser{ChannelID: entity.ChannelID, UserID: entity.UserID}
 }
+
+func participantEntityToModel(entity participantEntity) models.Participant {
+	return models.Participant{ChannelID: entity.ChannelID, GitLabUsername: entity.GitLabUsername, TelegramLabel: entity.TelegramLabel}
+}

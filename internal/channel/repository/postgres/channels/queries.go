@@ -128,6 +128,35 @@ func deleteIgnoredUserQuery(channelID, userID int64) (string, pgx.NamedArgs) {
 DELETE FROM channel_ignored_users WHERE channel_id = @channel_id AND user_id = @user_id`, pgx.NamedArgs{"channel_id": channelID, "user_id": userID}
 }
 
+func getParticipantsQuery(filters models.GetParticipantsFilters) (string, pgx.NamedArgs) {
+	query := `-- getParticipantsQuery
+SELECT channel_id, gitlab_username, telegram_label FROM channel_participants`
+	args := pgx.NamedArgs{}
+	if filters.ChannelID != nil {
+		query += `
+WHERE channel_id = @channel_id`
+		args["channel_id"] = *filters.ChannelID
+	}
+	return query + "\nORDER BY created_at, gitlab_username", args
+}
+
+func setParticipantQuery(participant models.Participant) (string, pgx.NamedArgs) {
+	return `-- setParticipantQuery
+WITH channel AS (
+    SELECT channel_id FROM channels WHERE channel_id = @channel_id
+), upserted AS (
+    INSERT INTO channel_participants (channel_id, gitlab_username, telegram_label)
+    SELECT channel_id, @gitlab_username, @telegram_label FROM channel
+    ON CONFLICT (channel_id, gitlab_username) DO UPDATE SET telegram_label = EXCLUDED.telegram_label
+)
+SELECT channel_id FROM channel`, pgx.NamedArgs{"channel_id": participant.ChannelID, "gitlab_username": participant.GitLabUsername, "telegram_label": participant.TelegramLabel}
+}
+
+func deleteParticipantQuery(channelID int64, gitLabUsername string) (string, pgx.NamedArgs) {
+	return `-- deleteParticipantQuery
+DELETE FROM channel_participants WHERE channel_id = @channel_id AND gitlab_username = @gitlab_username`, pgx.NamedArgs{"channel_id": channelID, "gitlab_username": gitLabUsername}
+}
+
 func getConnectionConflictQuery(channel models.Channel) (string, pgx.NamedArgs) {
 	return `-- getConnectionConflictQuery
 SELECT channel_id, linked_chat_id

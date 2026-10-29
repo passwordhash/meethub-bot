@@ -21,6 +21,7 @@ const (
 	pendingDailyTime   pendingKind = 1
 	pendingPostOffset  pendingKind = 2
 	pendingIgnoredUser pendingKind = 3
+	pendingParticipant pendingKind = 4
 )
 
 type pendingInput struct {
@@ -30,31 +31,37 @@ type pendingInput struct {
 }
 
 const (
-	actionList          = "list"
-	actionChannel       = "ch"
-	actionDay           = "day"
-	actionRemoveDay     = "del"
-	actionOffset        = "off"
-	actionOffsetPreset  = "offp"
-	actionOffsetCustom  = "offc"
-	actionLead          = "host"
-	actionIgnored       = "ign"
-	actionIgnoreAdd     = "igna"
-	actionIgnoreRemove  = "ignd"
-	staleButtonResponse = "Эта кнопка устарела. Откройте /start."
+	actionList              = "list"
+	actionChannel           = "ch"
+	actionDay               = "day"
+	actionRemoveDay         = "del"
+	actionOffset            = "off"
+	actionOffsetPreset      = "offp"
+	actionOffsetCustom      = "offc"
+	actionLead              = "host"
+	actionIgnored           = "ign"
+	actionIgnoreAdd         = "igna"
+	actionIgnoreRemove      = "ignd"
+	actionParticipants      = "prt"
+	actionParticipantAdd    = "prta"
+	actionParticipantRemove = "prtd"
+	staleButtonResponse     = "Эта кнопка устарела. Откройте /start."
 )
 
 var callbackArgumentCounts = map[string]int{
-	actionChannel:      0,
-	actionDay:          1,
-	actionRemoveDay:    1,
-	actionOffset:       0,
-	actionOffsetPreset: 1,
-	actionOffsetCustom: 0,
-	actionLead:         1,
-	actionIgnored:      0,
-	actionIgnoreAdd:    0,
-	actionIgnoreRemove: 1,
+	actionChannel:           0,
+	actionDay:               1,
+	actionRemoveDay:         1,
+	actionOffset:            0,
+	actionOffsetPreset:      1,
+	actionOffsetCustom:      0,
+	actionLead:              1,
+	actionIgnored:           0,
+	actionIgnoreAdd:         0,
+	actionIgnoreRemove:      1,
+	actionParticipants:      0,
+	actionParticipantAdd:    0,
+	actionParticipantRemove: 1,
 }
 
 var weekdaysFromMonday = []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday, time.Saturday, time.Sunday}
@@ -112,8 +119,11 @@ func (u *ChannelUseCase) sendChannelScreen(ctx context.Context, chatID, channelI
 		[]models.InlineButton{{Text: fmt.Sprintf("⏱ Пост за %d мин", schedule.PostOffsetMinutes), CallbackData: callbackData(actionOffset, channelID)}},
 		[]models.InlineButton{{Text: leadText, CallbackData: callbackData(actionLead, channelID, leadTarget)}},
 		[]models.InlineButton{{Text: "🚫 Игнор-лист", CallbackData: callbackData(actionIgnored, channelID)}},
-		[]models.InlineButton{{Text: "⬅️ Каналы", CallbackData: "ui:" + actionList}},
 	)
+	if u.mrBoard {
+		keyboard = append(keyboard, []models.InlineButton{{Text: "🧑‍💻 Участники MR", CallbackData: callbackData(actionParticipants, channelID)}})
+	}
+	keyboard = append(keyboard, []models.InlineButton{{Text: "⬅️ Каналы", CallbackData: "ui:" + actionList}})
 	return u.telegram.SendKeyboard(ctx, chatID, text, keyboard)
 }
 
@@ -140,6 +150,9 @@ func (u *ChannelUseCase) handleCallback(ctx context.Context, update models.Updat
 	}
 	action, arguments := parts[1], parts[3:]
 	argumentCount, known := callbackArgumentCounts[action]
+	if strings.HasPrefix(action, actionParticipants) && !u.mrBoard {
+		known = false
+	}
 	channelID, err := strconv.ParseInt(parts[2], 10, 64)
 	if !known || len(arguments) != argumentCount || err != nil || models.ValidateChannelID(channelID) != nil {
 		return u.telegram.Send(ctx, chatID, staleButtonResponse)
@@ -169,6 +182,14 @@ func (u *ChannelUseCase) handleCallback(ctx context.Context, update models.Updat
 		return u.telegram.SendKeyboard(ctx, chatID, "Отправьте Telegram ID пользователя (целое положительное число), чьи отчёты бот не будет учитывать.", [][]models.InlineButton{{back}})
 	case actionIgnoreRemove:
 		return u.removeIgnoredUser(ctx, chatID, channelID, arguments[0])
+	case actionParticipants:
+		return u.sendParticipants(ctx, chatID, channelID)
+	case actionParticipantAdd:
+		u.pending[chatID] = pendingInput{kind: pendingParticipant, channelID: channelID}
+		back := models.InlineButton{Text: "Отмена", CallbackData: callbackData(actionParticipants, channelID)}
+		return u.telegram.SendKeyboard(ctx, chatID, "Отправьте GitLab username и имя для доски через пробел, например: yarik @yarik. Повторная отправка того же username заменит имя.", [][]models.InlineButton{{back}})
+	case actionParticipantRemove:
+		return u.removeParticipant(ctx, chatID, channelID, arguments[0])
 	}
 	return u.telegram.Send(ctx, chatID, staleButtonResponse)
 }
@@ -289,6 +310,43 @@ func (u *ChannelUseCase) addIgnoredUser(ctx context.Context, chatID, channelID, 
 	return u.sendIgnoredUsers(ctx, chatID, channelID)
 }
 
+func (u *ChannelUseCase) sendParticipants(ctx context.Context, chatID, channelID int64) error {
+	participants, err := u.repository.GetParticipants(ctx, models.GetParticipantsFilters{ChannelID: &channelID})
+	if err != nil {
+		return u.failChannelAction(ctx, chatID, channelID, err, "Не удалось прочитать участников.")
+	}
+	text := fmt.Sprintf("Участники канала %d: доска MR показывает MR, где автор или ревьювер — участник, и подписывает их этими именами. Нажмите на участника, чтобы убрать его.", channelID)
+	if len(participants) == 0 {
+		text = fmt.Sprintf("Участников канала %d нет: доска MR для него не ведётся.", channelID)
+	}
+	keyboard := make([][]models.InlineButton, 0, len(participants)+2)
+	for _, participant := range participants {
+		keyboard = append(keyboard, []models.InlineButton{{Text: "❌ " + participant.GitLabUsername + " → " + participant.TelegramLabel, CallbackData: callbackData(actionParticipantRemove, channelID, participant.GitLabUsername)}})
+	}
+	keyboard = append(keyboard,
+		[]models.InlineButton{{Text: "➕ Добавить", CallbackData: callbackData(actionParticipantAdd, channelID)}},
+		[]models.InlineButton{{Text: "⬅️ Назад", CallbackData: callbackData(actionChannel, channelID)}},
+	)
+	return u.telegram.SendKeyboard(ctx, chatID, text, keyboard)
+}
+
+func (u *ChannelUseCase) removeParticipant(ctx context.Context, chatID, channelID int64, username string) error {
+	if models.ValidateGitLabUsername(username) != nil {
+		return u.telegram.Send(ctx, chatID, staleButtonResponse)
+	}
+	if err := u.repository.DeleteParticipant(ctx, channelID, username); err != nil {
+		return u.failChannelAction(ctx, chatID, channelID, err, "Не удалось убрать участника.")
+	}
+	return u.sendParticipants(ctx, chatID, channelID)
+}
+
+func (u *ChannelUseCase) addParticipant(ctx context.Context, chatID int64, participant models.Participant) error {
+	if err := u.repository.SetParticipant(ctx, participant); err != nil {
+		return u.failChannelAction(ctx, chatID, participant.ChannelID, err, "Не удалось добавить участника.")
+	}
+	return u.sendParticipants(ctx, chatID, participant.ChannelID)
+}
+
 func (u *ChannelUseCase) handlePendingInput(ctx context.Context, chatID int64, input pendingInput, text string) error {
 	switch input.kind {
 	case pendingDailyTime:
@@ -305,6 +363,13 @@ func (u *ChannelUseCase) handlePendingInput(ctx context.Context, chatID int64, i
 		}
 		delete(u.pending, chatID)
 		return u.addIgnoredUser(ctx, chatID, input.channelID, userID)
+	case pendingParticipant:
+		username, label, err := models.ParseParticipant(text)
+		if err != nil {
+			return u.telegram.Send(ctx, chatID, fmt.Sprintf("Некорректный ввод. Отправьте GitLab username (латиница, цифры, «_», «.», «-», до %d символов) и имя для доски до %d символов через пробел, например: yarik @yarik.", models.MaxGitLabUsernameLength, models.MaxTelegramLabelLength))
+		}
+		delete(u.pending, chatID)
+		return u.addParticipant(ctx, chatID, models.Participant{ChannelID: input.channelID, GitLabUsername: username, TelegramLabel: label})
 	default:
 		minutes, err := strconv.Atoi(text)
 		if err != nil || models.ValidatePostOffset(minutes) != nil {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/passwordhash/cascade-hub-bot/internal/channel/clients/telegram"
 )
@@ -17,4 +18,8 @@ func (n ownerNotifier) NotifyPublicationProblem(ctx context.Context, _ int64) er
 
 func (n ownerNotifier) NotifySummaryProblem(ctx context.Context, _ int64) error {
 	return n.telegram.Send(ctx, n.ownerID, "Доставка сводки требует проверки. Проверьте права бота и состояние группы.")
+}
+
+func (n ownerNotifier) NotifyBoardProblem(ctx context.Context, channelID int64) error {
+	return n.telegram.Send(ctx, n.ownerID, fmt.Sprintf("Доска MR канала %d не опубликована: дайте боту право закреплять сообщения в группе обсуждений.", channelID))
 }

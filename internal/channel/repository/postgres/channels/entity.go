@@ -25,3 +25,9 @@ type ignoredUserEntity struct {
 	ChannelID int64 `db:"channel_id"`
 	UserID    int64 `db:"user_id"`
 }
+
+type participantEntity struct {
+	ChannelID      int64  `db:"channel_id"`
+	GitLabUsername string `db:"gitlab_username"`
+	TelegramLabel  string `db:"telegram_label"`
+}

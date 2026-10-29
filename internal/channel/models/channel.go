@@ -10,6 +10,9 @@ var ErrAlreadyConnected = errors.New("channel is already connected to another gr
 var ErrGroupAlreadyConnected = errors.New("group is already connected to another channel")
 var ErrUnverifiablePermissions = errors.New("channel or group permissions could not be verified")
 var ErrTelegramRejected = errors.New("telegram rejected the request")
+
+// ErrBoardMessageMissing permits recreating a board, unlike permission or rate-limit failures.
+var ErrBoardMessageMissing = errors.New("telegram board message is missing")
 var ErrInvalidUserID = errors.New("invalid user id")
 
 type Channel struct {
