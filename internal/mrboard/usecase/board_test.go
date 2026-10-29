@@ -46,7 +46,7 @@ var teamMR = models.MergeRequest{ProjectID: 1, IID: 406, Reference: "cascade!406
 func teamBody() string {
 	_, sections := domain.Track([]models.MergeRequest{teamMR}, nil, nil, now)
 	labels := map[string]string{"yarik": "@yarik"}
-	return domain.RenderBody(domain.Items([]models.MergeRequest{teamMR}, nil, sections, labels, now), labels, now)
+	return domain.RenderBody(domain.Items([]models.MergeRequest{teamMR}, nil, sections, labels, now), labels, channelmodels.BoardViewBalls, now)
 }
 
 // expectPoll sets up a poll that finds teamMR and returns the board body it renders to.
@@ -63,13 +63,13 @@ func (f *boardFixture) expectPoll(boards []models.Board) string {
 func TestTickCreatesAndPinsBoard(t *testing.T) {
 	f := newBoardFixture(t)
 	body := f.expectPoll(nil)
-	if !strings.Contains(body, "cascade!406 лимит — tema → @yarik · 1ч") {
+	if !strings.Contains(body, "| cascade!406 | лимит | tema → @yarik | 1ч |") {
 		t.Fatalf("body = %q", body)
 	}
 	gomock.InOrder(
 		f.telegram.EXPECT().CanPin(gomock.Any(), groupID).Return(true, nil),
 		f.telegram.EXPECT().SendBoard(gomock.Any(), groupID, domain.Render(body, now)).Return(int64(77), nil),
-		f.boards.EXPECT().SaveBoard(gomock.Any(), models.Board{ChannelID: channelID, MessageID: 77, Body: body, UpdatedAt: now}).Return(nil),
+		f.boards.EXPECT().SaveBoard(gomock.Any(), models.Board{ChannelID: channelID, MessageID: 77, Body: body, Format: models.BoardFormatRich, UpdatedAt: now}).Return(nil),
 		f.telegram.EXPECT().PinBoard(gomock.Any(), groupID, int64(77)).Return(nil),
 	)
 	if err := f.uc.Tick(context.Background()); err != nil {
@@ -93,7 +93,7 @@ func TestTickWithoutPinRightNotifiesOnce(t *testing.T) {
 
 func TestTickKeepsUnchangedPinnedBoard(t *testing.T) {
 	f := newBoardFixture(t)
-	f.expectPoll([]models.Board{{ChannelID: channelID, MessageID: 77, Body: teamBody(), UpdatedAt: now.Add(-time.Hour)}})
+	f.expectPoll([]models.Board{{ChannelID: channelID, MessageID: 77, Body: teamBody(), Format: models.BoardFormatRich, UpdatedAt: now.Add(-time.Hour)}})
 	f.telegram.EXPECT().PinnedMessageID(gomock.Any(), groupID).Return(int64(77), nil)
 	if err := f.uc.Tick(context.Background()); err != nil {
 		t.Fatal(err)
@@ -102,11 +102,26 @@ func TestTickKeepsUnchangedPinnedBoard(t *testing.T) {
 
 func TestTickEditsChangedBoard(t *testing.T) {
 	f := newBoardFixture(t)
-	body := f.expectPoll([]models.Board{{ChannelID: channelID, MessageID: 77, Body: "old", UpdatedAt: now.Add(-time.Hour)}})
+	body := f.expectPoll([]models.Board{{ChannelID: channelID, MessageID: 77, Body: "old", Format: models.BoardFormatRich, UpdatedAt: now.Add(-time.Hour)}})
 	gomock.InOrder(
 		f.telegram.EXPECT().EditBoard(gomock.Any(), groupID, int64(77), domain.Render(body, now)).Return(nil),
-		f.boards.EXPECT().SaveBoard(gomock.Any(), models.Board{ChannelID: channelID, MessageID: 77, Body: body, UpdatedAt: now}).Return(nil),
+		f.boards.EXPECT().SaveBoard(gomock.Any(), models.Board{ChannelID: channelID, MessageID: 77, Body: body, Format: models.BoardFormatRich, UpdatedAt: now}).Return(nil),
 		f.telegram.EXPECT().PinnedMessageID(gomock.Any(), groupID).Return(int64(77), nil),
+	)
+	if err := f.uc.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTickMigratesPlainBoardToRich(t *testing.T) {
+	f := newBoardFixture(t)
+	body := f.expectPoll([]models.Board{{ChannelID: channelID, MessageID: 77, Body: teamBody(), Format: models.BoardFormatPlain, UpdatedAt: now.Add(-time.Hour)}})
+	gomock.InOrder(
+		f.telegram.EXPECT().UnpinBoard(gomock.Any(), groupID, int64(77)).Return(nil),
+		f.telegram.EXPECT().CanPin(gomock.Any(), groupID).Return(true, nil),
+		f.telegram.EXPECT().SendBoard(gomock.Any(), groupID, domain.Render(body, now)).Return(int64(78), nil),
+		f.boards.EXPECT().SaveBoard(gomock.Any(), models.Board{ChannelID: channelID, MessageID: 78, Body: body, Format: models.BoardFormatRich, UpdatedAt: now}).Return(nil),
+		f.telegram.EXPECT().PinBoard(gomock.Any(), groupID, int64(78)).Return(nil),
 	)
 	if err := f.uc.Tick(context.Background()); err != nil {
 		t.Fatal(err)
@@ -142,11 +157,11 @@ func TestTickRecreatesLostBoard(t *testing.T) {
 				stored = body
 			}
 			f := newBoardFixture(t)
-			f.expectPoll([]models.Board{{ChannelID: channelID, MessageID: 77, Body: stored}})
+			f.expectPoll([]models.Board{{ChannelID: channelID, MessageID: 77, Body: stored, Format: models.BoardFormatRich}})
 			tt.expect(f, body)
 			f.telegram.EXPECT().CanPin(gomock.Any(), groupID).Return(true, nil)
 			f.telegram.EXPECT().SendBoard(gomock.Any(), groupID, domain.Render(body, now)).Return(int64(78), nil)
-			f.boards.EXPECT().SaveBoard(gomock.Any(), models.Board{ChannelID: channelID, MessageID: 78, Body: body, UpdatedAt: now}).Return(nil)
+			f.boards.EXPECT().SaveBoard(gomock.Any(), models.Board{ChannelID: channelID, MessageID: 78, Body: body, Format: models.BoardFormatRich, UpdatedAt: now}).Return(nil)
 			f.telegram.EXPECT().PinBoard(gomock.Any(), groupID, int64(78)).Return(nil)
 			if err := f.uc.Tick(context.Background()); err != nil {
 				t.Fatal(err)
@@ -162,7 +177,7 @@ func TestTickRepinsUnpinnedBoard(t *testing.T) {
 	f.boards.EXPECT().SaveTracks(gomock.Any(), gomock.Len(0), gomock.Len(0)).Return(nil)
 	f.channels.EXPECT().GetChannels(gomock.Any(), gomock.Any()).Return([]channelmodels.Channel{{ChannelID: channelID, GroupID: groupID}}, nil)
 	f.channels.EXPECT().GetParticipants(gomock.Any(), gomock.Any()).Return([]channelmodels.Participant{{ChannelID: channelID, GitLabUsername: "yarik", TelegramLabel: "@yarik"}}, nil)
-	f.boards.EXPECT().GetBoards(gomock.Any(), gomock.Any()).Return([]models.Board{{ChannelID: channelID, MessageID: 77, Body: "Открытых MR команды нет."}}, nil)
+	f.boards.EXPECT().GetBoards(gomock.Any(), gomock.Any()).Return([]models.Board{{ChannelID: channelID, MessageID: 77, Body: "Открытых MR команды нет.", Format: models.BoardFormatRich}}, nil)
 	f.telegram.EXPECT().PinnedMessageID(gomock.Any(), groupID).Return(int64(12), nil)
 	f.telegram.EXPECT().PinBoard(gomock.Any(), groupID, int64(77)).Return(nil)
 	if err := f.uc.Tick(context.Background()); err != nil {
@@ -177,10 +192,10 @@ func TestTickClearsBoardWithoutParticipants(t *testing.T) {
 	f.boards.EXPECT().SaveTracks(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	f.channels.EXPECT().GetChannels(gomock.Any(), gomock.Any()).Return([]channelmodels.Channel{{ChannelID: channelID, GroupID: groupID}}, nil)
 	f.channels.EXPECT().GetParticipants(gomock.Any(), gomock.Any()).Return(nil, nil)
-	f.boards.EXPECT().GetBoards(gomock.Any(), gomock.Any()).Return([]models.Board{{ChannelID: channelID, MessageID: 77, Body: "stale MR"}}, nil)
+	f.boards.EXPECT().GetBoards(gomock.Any(), gomock.Any()).Return([]models.Board{{ChannelID: channelID, MessageID: 77, Body: "stale MR", Format: models.BoardFormatRich}}, nil)
 	body := "Открытых MR команды нет."
 	f.telegram.EXPECT().EditBoard(gomock.Any(), groupID, int64(77), domain.Render(body, now)).Return(nil)
-	f.boards.EXPECT().SaveBoard(gomock.Any(), models.Board{ChannelID: channelID, MessageID: 77, Body: body, UpdatedAt: now}).Return(nil)
+	f.boards.EXPECT().SaveBoard(gomock.Any(), models.Board{ChannelID: channelID, MessageID: 77, Body: body, Format: models.BoardFormatRich, UpdatedAt: now}).Return(nil)
 	f.telegram.EXPECT().PinnedMessageID(gomock.Any(), groupID).Return(int64(77), nil)
 	if err := f.uc.Tick(context.Background()); err != nil {
 		t.Fatal(err)
@@ -195,7 +210,7 @@ func TestTickDoesNotRecreateOnRejection(t *testing.T) {
 			if edit {
 				body = "old"
 			}
-			f.expectPoll([]models.Board{{ChannelID: channelID, MessageID: 77, Body: body}})
+			f.expectPoll([]models.Board{{ChannelID: channelID, MessageID: 77, Body: body, Format: models.BoardFormatRich}})
 			if edit {
 				f.telegram.EXPECT().EditBoard(gomock.Any(), groupID, int64(77), gomock.Any()).Return(channelmodels.ErrTelegramRejected)
 			} else {

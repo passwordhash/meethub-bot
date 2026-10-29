@@ -77,6 +77,11 @@ func (r *Repository) SetLeadEnabled(ctx context.Context, channelID int64, enable
 	return r.execForChannel(ctx, "set daily lead setting", query, args)
 }
 
+func (r *Repository) SetBoardView(ctx context.Context, channelID int64, view models.BoardView) error {
+	query, args := setBoardViewQuery(channelID, view)
+	return r.execForChannel(ctx, "set MR board view", query, args)
+}
+
 func (r *Repository) ClearScheduleReset(ctx context.Context, channelID int64) error {
 	query, args := clearScheduleResetQuery(channelID)
 	return r.execForChannel(ctx, "clear schedule reset notice", query, args)

@@ -89,3 +89,44 @@ func TestBoardRequests(t *testing.T) {
 		})
 	}
 }
+
+func TestRichBoardPayloads(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		run    func(*Client) error
+	}{
+		{name: "board is sent as a rich markdown message", method: "sendRichMessage", run: func(c *Client) error {
+			_, err := c.SendBoard(context.Background(), -1, "| таблица |")
+			return err
+		}},
+		{name: "board edit carries a rich message", method: "editMessageText", run: func(c *Client) error {
+			return c.EditBoard(context.Background(), -1, 5, "| таблица |")
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/bottoken/"+tt.method {
+					t.Errorf("path = %s", r.URL.Path)
+				}
+				var got map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Errorf("decode request: %v", err)
+				}
+				rich, _ := got["rich_message"].(map[string]any)
+				if rich == nil || rich["format"] != "markdown" || rich["content"] != "| таблица |" {
+					t.Errorf("rich_message = %#v", got["rich_message"])
+				}
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"ok":true,"result":{"message_id":9}}`))
+			}))
+			defer server.Close()
+			client := New("token")
+			client.endpoint = server.URL
+			if err := tt.run(client); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

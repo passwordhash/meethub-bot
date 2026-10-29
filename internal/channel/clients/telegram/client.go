@@ -443,22 +443,22 @@ func (m *sentMessage) UnmarshalJSON(data []byte) error {
 }
 
 func (c *Client) SendPost(ctx context.Context, channelID int64, htmlText string) (int64, error) {
-	return c.sendMessage(ctx, map[string]any{"chat_id": channelID, "text": htmlText, "parse_mode": "HTML"})
+	return c.sendMessage(ctx, "sendMessage", map[string]any{"chat_id": channelID, "text": htmlText, "parse_mode": "HTML"})
 }
 
 func (c *Client) SendReply(ctx context.Context, linkedGroupID, autoForwardMessageID int64, plainText string) (int64, error) {
 	if autoForwardMessageID <= 0 {
 		return 0, errors.Join(ErrAPI, errors.New("invalid reply message ID"))
 	}
-	return c.sendMessage(ctx, map[string]any{
+	return c.sendMessage(ctx, "sendMessage", map[string]any{
 		"chat_id": linkedGroupID, "text": plainText,
 		"reply_parameters": map[string]int64{"message_id": autoForwardMessageID},
 	})
 }
 
-func (c *Client) sendMessage(ctx context.Context, input map[string]any) (int64, error) {
+func (c *Client) sendMessage(ctx context.Context, method string, input map[string]any) (int64, error) {
 	var sent sentMessage
-	if err := c.call(ctx, "sendMessage", input, &sent); err != nil {
+	if err := c.call(ctx, method, input, &sent); err != nil {
 		return 0, err
 	}
 	if sent.MessageID <= 0 {

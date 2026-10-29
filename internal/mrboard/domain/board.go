@@ -7,11 +7,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	channelmodels "github.com/passwordhash/cascade-hub-bot/internal/channel/models"
 	"github.com/passwordhash/cascade-hub-bot/internal/mrboard/models"
 )
-
-// MaxMessageLength is Telegram's limit for a message text.
-const MaxMessageLength = 4096
 
 var moscow = time.FixedZone("UTC+3", 3*60*60)
 
@@ -187,7 +185,34 @@ func person(username string, participants map[string]string) string {
 	return username
 }
 
-func renderLine(item Item, arrow string, participants map[string]string, now time.Time) string {
+// maxTitleLength keeps board table rows readable; longer titles are cut with an ellipsis.
+const maxTitleLength = 48
+
+var ballBadges = map[models.Section]string{
+	models.SectionAwaitingReview:  "👀",
+	models.SectionAwaitingChanges: "✍️",
+	models.SectionApproved:        "✅",
+}
+
+// cellTitle shortens a merge request title for its table cell and keeps pipes and newlines from breaking the table.
+func cellTitle(title string) string {
+	title = strings.TrimSpace(title)
+	if utf8.RuneCountInString(title) > maxTitleLength {
+		title = string([]rune(title)[:maxTitleLength]) + "…"
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(title, "|", `\|`), "\n", " ")
+}
+
+// referenceCell hyperlinks the merge request reference, the only place the board links to GitLab.
+func referenceCell(mr models.MergeRequest) string {
+	if mr.WebURL == "" {
+		return mr.Reference
+	}
+	return fmt.Sprintf("[%s](%s)", mr.Reference, mr.WebURL)
+}
+
+// rowCells builds the shared MR, title, who and age cells; arrow carries the section's ball direction.
+func rowCells(item Item, arrow string, participants map[string]string, now time.Time) []string {
 	mr := item.MergeRequest
 	reviewers := make([]string, 0, len(mr.Reviewers))
 	for _, reviewer := range mr.Reviewers {
@@ -197,12 +222,146 @@ func renderLine(item Item, arrow string, participants map[string]string, now tim
 		}
 		reviewers = append(reviewers, person(reviewer.Username, participants)+badge)
 	}
-	return fmt.Sprintf("• %s %s — %s%s%s · %s", mr.Reference, strings.TrimSpace(mr.Title), person(mr.Author, participants), arrow, strings.Join(reviewers, ", "), FormatAge(now.Sub(item.Since)))
+	who := person(mr.Author, participants) + arrow + strings.Join(reviewers, ", ")
+	return []string{referenceCell(mr), cellTitle(mr.Title), who, FormatAge(now.Sub(item.Since))}
 }
 
-// RenderBody lays out the board sections; longest waiting merge requests come first.
-// Lines that do not fit into a Telegram message are summarised by a counter.
-func RenderBody(items []Item, participants map[string]string, now time.Time) string {
+// table renders a GitHub Flavored Markdown table, the markup of Telegram rich messages.
+func table(header []string, rows [][]string) string {
+	row := func(cells []string) string {
+		parts := make([]string, len(cells))
+		for index, cell := range cells {
+			parts[index] = " " + cell + " "
+		}
+		return "|" + strings.Join(parts, "|") + "|"
+	}
+	separator := "|"
+	for range header {
+		separator += "---|"
+	}
+	lines := []string{row(header), separator}
+	for _, cells := range rows {
+		lines = append(lines, row(cells))
+	}
+	return strings.Join(lines, "\n")
+}
+
+var ballsHeader = []string{"MR", "Титул", "Кто", "⏱"}
+
+func arrowOf(section models.Section) string {
+	for _, entry := range sectionTitles {
+		if entry.section == section {
+			return entry.arrow
+		}
+	}
+	return " · "
+}
+
+func titleOf(section models.Section) string {
+	for _, entry := range sectionTitles {
+		if entry.section == section {
+			return entry.title
+		}
+	}
+	return ""
+}
+
+// renderByBalls gives each section one table, rows by waiting age.
+func renderByBalls(sorted []Item, participants map[string]string, now time.Time) []string {
+	var blocks []string
+	for _, section := range sectionTitles {
+		rows := make([][]string, 0, len(sorted))
+		for _, item := range sorted {
+			if item.Section == section.section {
+				rows = append(rows, rowCells(item, section.arrow, participants, now))
+			}
+		}
+		if len(rows) > 0 {
+			blocks = append(blocks, "**"+section.title+"**\n\n"+table(ballsHeader, rows))
+		}
+	}
+	return blocks
+}
+
+// renderByReviewer splits the waiting sections into a block per person who owes action:
+// a merge request with several waiting reviewers appears in each of their blocks.
+func renderByReviewer(sorted []Item, participants map[string]string, now time.Time) []string {
+	var blocks []string
+	reviewerOrder := []string{}
+	rowsByReviewer := map[string][][]string{}
+	authorOrder := []string{}
+	rowsByAuthor := map[string][][]string{}
+	approvedRows := [][]string{}
+	for _, item := range sorted {
+		switch item.Section {
+		case models.SectionAwaitingReview:
+			for _, reviewer := range item.MergeRequest.Reviewers {
+				if Ball(reviewer.State) != "reviewer" {
+					continue
+				}
+				if _, seen := rowsByReviewer[reviewer.Username]; !seen {
+					reviewerOrder = append(reviewerOrder, reviewer.Username)
+					rowsByReviewer[reviewer.Username] = nil
+				}
+				rowsByReviewer[reviewer.Username] = append(rowsByReviewer[reviewer.Username], rowCells(item, arrowOf(item.Section), participants, now))
+			}
+		case models.SectionAwaitingChanges:
+			author := item.MergeRequest.Author
+			if _, seen := rowsByAuthor[author]; !seen {
+				authorOrder = append(authorOrder, author)
+				rowsByAuthor[author] = nil
+			}
+			rowsByAuthor[author] = append(rowsByAuthor[author], rowCells(item, arrowOf(item.Section), participants, now))
+		case models.SectionApproved:
+			approvedRows = append(approvedRows, rowCells(item, arrowOf(item.Section), participants, now))
+		}
+	}
+	if len(reviewerOrder) > 0 {
+		blocks = append(blocks, "**"+titleOf(models.SectionAwaitingReview)+"**")
+		for _, username := range reviewerOrder {
+			blocks = append(blocks, "**"+person(username, participants)+" смотрит**\n\n"+table(ballsHeader, rowsByReviewer[username]))
+		}
+	}
+	if len(authorOrder) > 0 {
+		blocks = append(blocks, "**"+titleOf(models.SectionAwaitingChanges)+"**")
+		for _, author := range authorOrder {
+			blocks = append(blocks, "**"+person(author, participants)+" должен**\n\n"+table(ballsHeader, rowsByAuthor[author]))
+		}
+	}
+	if len(approvedRows) > 0 {
+		blocks = append(blocks, "**"+titleOf(models.SectionApproved)+"**\n\n"+table(ballsHeader, approvedRows))
+	}
+	return blocks
+}
+
+var projectHeader = []string{"MR", "Титул", "⚡", "Кто", "⏱"}
+
+// renderByProject gives each project one table, projects in alphabetical order, the ball as a row badge.
+func renderByProject(sorted []Item, participants map[string]string, now time.Time) []string {
+	projects := []string{}
+	rowsByProject := map[string][][]string{}
+	for _, item := range sorted {
+		// shortcut: the project name is the reference prefix; carry ProjectName in the model if GitLab stops sending references
+		project, _, _ := strings.Cut(item.MergeRequest.Reference, "!")
+		if project == "" {
+			project = "прочее"
+		}
+		if _, seen := rowsByProject[project]; !seen {
+			projects = append(projects, project)
+			rowsByProject[project] = nil
+		}
+		cells := rowCells(item, arrowOf(item.Section), participants, now)
+		rowsByProject[project] = append(rowsByProject[project], []string{cells[0], cells[1], ballBadges[item.Section], cells[2], cells[3]})
+	}
+	sort.Strings(projects)
+	blocks := make([]string, 0, len(projects))
+	for _, project := range projects {
+		blocks = append(blocks, "**"+project+"**\n\n"+table(projectHeader, rowsByProject[project]))
+	}
+	return blocks
+}
+
+func sortedItems(items []Item) []Item {
 	sorted := append([]Item(nil), items...)
 	sort.SliceStable(sorted, func(left, right int) bool {
 		if !sorted[left].Since.Equal(sorted[right].Since) {
@@ -210,46 +369,25 @@ func RenderBody(items []Item, participants map[string]string, now time.Time) str
 		}
 		return sorted[left].MergeRequest.Reference < sorted[right].MergeRequest.Reference
 	})
+	return sorted
+}
+
+// RenderBody lays out the board in the channel's view; longest waiting merge requests come first.
+func RenderBody(items []Item, participants map[string]string, view channelmodels.BoardView, now time.Time) string {
+	sorted := sortedItems(items)
 	var blocks []string
-	for _, section := range sectionTitles {
-		lines := []string{section.title}
-		for _, item := range sorted {
-			if item.Section == section.section {
-				lines = append(lines, renderLine(item, section.arrow, participants, now))
-			}
-		}
-		if len(lines) > 1 {
-			blocks = append(blocks, strings.Join(lines, "\n"))
-		}
+	switch view {
+	case channelmodels.BoardViewReviewer:
+		blocks = renderByReviewer(sorted, participants, now)
+	case channelmodels.BoardViewProject:
+		blocks = renderByProject(sorted, participants, now)
+	default:
+		blocks = renderByBalls(sorted, participants, now)
 	}
 	if len(blocks) == 0 {
 		return "Открытых MR команды нет."
 	}
-	return fit(strings.Join(blocks, "\n\n"))
-}
-
-// headerReserve leaves room for the header that Render prepends.
-const headerReserve = 64
-
-func fit(body string) string {
-	if utf8.RuneCountInString(body) <= MaxMessageLength-headerReserve {
-		return body
-	}
-	lines := strings.Split(body, "\n")
-	for hidden := 1; hidden <= len(lines); hidden++ {
-		kept := lines[:len(lines)-hidden]
-		dropped := 0
-		for _, line := range lines[len(lines)-hidden:] {
-			if strings.HasPrefix(line, "• ") {
-				dropped++
-			}
-		}
-		candidate := strings.TrimRight(strings.Join(kept, "\n"), "\n") + fmt.Sprintf("\n\n…и ещё %d MR", dropped)
-		if utf8.RuneCountInString(candidate) <= MaxMessageLength-headerReserve {
-			return candidate
-		}
-	}
-	return ""
+	return strings.Join(blocks, "\n\n")
 }
 
 func Render(body string, updatedAt time.Time) string {

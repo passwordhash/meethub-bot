@@ -31,6 +31,7 @@ type MergeRequest struct {
 	ProjectID int64
 	IID       int64
 	Reference string
+	WebURL    string
 	Title     string
 	Author    string
 	Draft     bool
@@ -61,10 +62,19 @@ type SectionTrack struct {
 	Since     time.Time
 }
 
+// Board message formats; plain is the pre-rich board, remembered only to migrate its pin.
+type BoardFormat string
+
+const (
+	BoardFormatPlain BoardFormat = "plain"
+	BoardFormatRich  BoardFormat = "rich"
+)
+
 type Board struct {
 	ChannelID int64
 	MessageID int64
 	Body      string
+	Format    BoardFormat
 	UpdatedAt time.Time
 }
 

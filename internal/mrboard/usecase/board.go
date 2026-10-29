@@ -101,7 +101,7 @@ func (u *BoardUseCase) Tick(ctx context.Context) error {
 		if len(channelLabels) == 0 && !found {
 			continue
 		}
-		body := domain.RenderBody(domain.Items(mrs, reviewers, sections, channelLabels, now), channelLabels, now)
+		body := domain.RenderBody(domain.Items(mrs, reviewers, sections, channelLabels, now), channelLabels, channel.BoardView, now)
 		if err := u.sync(ctx, channel, board, found, body, now); err != nil {
 			slog.Warn("MR board sync failed", "channel_id", channel.ChannelID, "error", err)
 			failed = errors.Join(failed, err)
@@ -112,6 +112,13 @@ func (u *BoardUseCase) Tick(ctx context.Context) error {
 
 func (u *BoardUseCase) sync(ctx context.Context, channel channelmodels.Channel, board models.Board, found bool, body string, now time.Time) error {
 	if !found {
+		return u.create(ctx, channel, body, now)
+	}
+	if board.Format != models.BoardFormatRich {
+		// A plain-text pin cannot be edited into a rich message: drop it and post a rich board in its place (ADR 0002).
+		if err := u.telegram.UnpinBoard(ctx, channel.GroupID, board.MessageID); err != nil {
+			slog.Warn("unpin plain MR board failed; pinning the new board replaces it", "channel_id", channel.ChannelID, "error", err)
+		}
 		return u.create(ctx, channel, body, now)
 	}
 	if body != board.Body {
@@ -165,7 +172,7 @@ func (u *BoardUseCase) create(ctx context.Context, channel channelmodels.Channel
 	if err != nil {
 		return fmt.Errorf("send MR board: %w", err)
 	}
-	if err := u.boards.SaveBoard(ctx, models.Board{ChannelID: channel.ChannelID, MessageID: messageID, Body: body, UpdatedAt: now}); err != nil {
+	if err := u.boards.SaveBoard(ctx, models.Board{ChannelID: channel.ChannelID, MessageID: messageID, Body: body, Format: models.BoardFormatRich, UpdatedAt: now}); err != nil {
 		return err
 	}
 	if err := u.telegram.PinBoard(ctx, channel.GroupID, messageID); err != nil {

@@ -40,7 +40,7 @@ func TestScheduleGridPostgres(t *testing.T) {
 	if _, err := db.Exec(ctx, `INSERT INTO channels (channel_id, linked_chat_id) VALUES (-10, -1010)`); err != nil {
 		t.Fatal(err)
 	}
-	applyMigrations(t, ctx, db, 10, 10)
+	applyMigrations(t, ctx, db, 10, 13)
 	repository := New(postgres.NewGetter(db))
 
 	ten := 10 * time.Hour
@@ -82,7 +82,7 @@ func TestScheduleGridPostgres(t *testing.T) {
 func TestScheduleEditsPostgres(t *testing.T) {
 	ctx := context.Background()
 	db := isolatedDatabase(t)
-	applyMigrations(t, ctx, db, 1, 10)
+	applyMigrations(t, ctx, db, 1, 13)
 	if _, err := db.Exec(ctx, `INSERT INTO channels (channel_id, linked_chat_id, schedule_reset_pending) VALUES (-1, -11, TRUE), (-2, -12, FALSE)`); err != nil {
 		t.Fatal(err)
 	}
@@ -150,6 +150,12 @@ func TestScheduleEditsPostgres(t *testing.T) {
 	if err := repository.SetPostOffset(ctx, channelID, 1440); err == nil {
 		t.Fatal("offset beyond the day was stored")
 	}
+	if err := repository.SetBoardView(ctx, channelID, models.BoardViewProject); err != nil {
+		t.Fatal(err)
+	}
+	if view := load().BoardView; view != models.BoardViewProject {
+		t.Fatalf("board view = %d; want %d", view, models.BoardViewProject)
+	}
 
 	missing := int64(-99)
 	for name, err := range map[string]error{
@@ -157,6 +163,7 @@ func TestScheduleEditsPostgres(t *testing.T) {
 		"offset":     repository.SetPostOffset(ctx, missing, 30),
 		"lead":       repository.SetLeadEnabled(ctx, missing, true),
 		"reset":      repository.ClearScheduleReset(ctx, missing),
+		"view":       repository.SetBoardView(ctx, missing, models.BoardViewBalls),
 	} {
 		if !errors.Is(err, models.ErrInvalidChannelID) {
 			t.Errorf("%s for an unknown channel = %v", name, err)
@@ -167,7 +174,7 @@ func TestScheduleEditsPostgres(t *testing.T) {
 func TestIgnoredUsersPostgres(t *testing.T) {
 	ctx := context.Background()
 	db := isolatedDatabase(t)
-	applyMigrations(t, ctx, db, 1, 11)
+	applyMigrations(t, ctx, db, 1, 13)
 	if _, err := db.Exec(ctx, `INSERT INTO channels (channel_id, linked_chat_id) VALUES (-1, -11), (-2, -12)`); err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +218,7 @@ func TestIgnoredUsersPostgres(t *testing.T) {
 func TestParticipantsPostgres(t *testing.T) {
 	ctx := context.Background()
 	db := isolatedDatabase(t)
-	applyMigrations(t, ctx, db, 1, 12)
+	applyMigrations(t, ctx, db, 1, 13)
 	if _, err := db.Exec(ctx, `INSERT INTO channels (channel_id, linked_chat_id) VALUES (-1, -11), (-2, -12)`); err != nil {
 		t.Fatal(err)
 	}

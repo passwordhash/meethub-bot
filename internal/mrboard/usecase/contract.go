@@ -29,6 +29,7 @@ type boardClient interface {
 	CanPin(context.Context, int64) (bool, error)
 	SendBoard(context.Context, int64, string) (int64, error)
 	EditBoard(context.Context, int64, int64, string) error
+	UnpinBoard(context.Context, int64, int64) error
 	PinBoard(context.Context, int64, int64) error
 	PinnedMessageID(context.Context, int64) (int64, error)
 }

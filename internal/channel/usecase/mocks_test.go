@@ -173,6 +173,20 @@ func (mr *MockChannelRepositoryMockRecorder) GetSchedules(arg0, arg1 any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSchedules", reflect.TypeOf((*MockChannelRepository)(nil).GetSchedules), arg0, arg1)
 }
 
+// SetBoardView mocks base method.
+func (m *MockChannelRepository) SetBoardView(arg0 context.Context, arg1 int64, arg2 models.BoardView) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetBoardView", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetBoardView indicates an expected call of SetBoardView.
+func (mr *MockChannelRepositoryMockRecorder) SetBoardView(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBoardView", reflect.TypeOf((*MockChannelRepository)(nil).SetBoardView), arg0, arg1, arg2)
+}
+
 // SetDailyTime mocks base method.
 func (m *MockChannelRepository) SetDailyTime(arg0 context.Context, arg1 int64, arg2 time.Weekday, arg3 time.Duration) error {
 	m.ctrl.T.Helper()

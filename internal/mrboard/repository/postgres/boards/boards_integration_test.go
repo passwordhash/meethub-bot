@@ -19,13 +19,13 @@ import (
 func TestBoardsPostgres(t *testing.T) {
 	ctx := context.Background()
 	db := isolatedDatabase(t)
-	applyMigrations(t, ctx, db, 1, 12)
+	applyMigrations(t, ctx, db, 1, 13)
 	if _, err := db.Exec(ctx, `INSERT INTO channels (channel_id, linked_chat_id) VALUES (-1, -11), (-2, -12)`); err != nil {
 		t.Fatal(err)
 	}
 	repository := New(postgres.NewGetter(db))
 	at := time.Date(2026, 10, 29, 11, 0, 0, 0, time.UTC)
-	for _, board := range []models.Board{{ChannelID: -1, MessageID: 5, Body: "old", UpdatedAt: at}, {ChannelID: -1, MessageID: 6, Body: "new", UpdatedAt: at.Add(time.Minute)}, {ChannelID: -2, MessageID: 9, Body: "other", UpdatedAt: at}} {
+	for _, board := range []models.Board{{ChannelID: -1, MessageID: 5, Body: "old", Format: models.BoardFormatPlain, UpdatedAt: at}, {ChannelID: -1, MessageID: 6, Body: "new", Format: models.BoardFormatRich, UpdatedAt: at.Add(time.Minute)}, {ChannelID: -2, MessageID: 9, Body: "other", Format: models.BoardFormatRich, UpdatedAt: at}} {
 		if err := repository.SaveBoard(ctx, board); err != nil {
 			t.Fatalf("SaveBoard(%+v) = %v", board, err)
 		}
@@ -35,7 +35,7 @@ func TestBoardsPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(boards) != 1 || boards[0].MessageID != 6 || boards[0].Body != "new" || !boards[0].UpdatedAt.Equal(at.Add(time.Minute)) {
+	if len(boards) != 1 || boards[0].MessageID != 6 || boards[0].Body != "new" || boards[0].Format != models.BoardFormatRich || !boards[0].UpdatedAt.Equal(at.Add(time.Minute)) {
 		t.Fatalf("boards = %+v", boards)
 	}
 	if err := repository.SaveBoard(ctx, models.Board{ChannelID: -99, MessageID: 1, UpdatedAt: at}); err == nil {
@@ -46,7 +46,7 @@ func TestBoardsPostgres(t *testing.T) {
 func TestTracksPostgres(t *testing.T) {
 	ctx := context.Background()
 	db := isolatedDatabase(t)
-	applyMigrations(t, ctx, db, 1, 12)
+	applyMigrations(t, ctx, db, 1, 13)
 	repository := New(postgres.NewGetter(db))
 	at := time.Date(2026, 10, 29, 11, 0, 0, 0, time.UTC)
 	first := []models.ReviewerTrack{
