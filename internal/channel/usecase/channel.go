@@ -14,21 +14,22 @@ import (
 )
 
 type ChannelUseCase struct {
-	ownerID    int64
-	repository ChannelRepository
-	slots      slotRepository
-	telegram   TelegramClient
-	processor  updateProcessor
-	pending    map[int64]pendingInput
-	now        func() time.Time
-	mrBoard    bool
+	ownerID            int64
+	repository         ChannelRepository
+	slots              slotRepository
+	telegram           TelegramClient
+	processor          updateProcessor
+	pending            map[int64]pendingInput
+	now                func() time.Time
+	manualParticipants bool // Disabled while GitLab profiles supply the mapping.
+	mrBoard            bool
 }
 
 func NewChannelUseCase(ownerID int64, repository ChannelRepository, slots slotRepository, telegram TelegramClient, processor updateProcessor) *ChannelUseCase {
 	return &ChannelUseCase{ownerID: ownerID, repository: repository, slots: slots, telegram: telegram, processor: processor, pending: make(map[int64]pendingInput), now: time.Now}
 }
 
-// EnableMRBoard shows the MR board participants in the channel menu; without GitLab the board is off.
+// EnableMRBoard enables MR board settings in the channel menu.
 func (u *ChannelUseCase) EnableMRBoard() {
 	u.mrBoard = true
 }

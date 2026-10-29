@@ -123,8 +123,10 @@ func (u *ChannelUseCase) sendChannelScreen(ctx context.Context, chatID, channelI
 		[]models.InlineButton{{Text: "🚫 Игнор-лист", CallbackData: callbackData(actionIgnored, channelID)}},
 	)
 	if u.mrBoard {
+		if u.manualParticipants {
+			keyboard = append(keyboard, []models.InlineButton{{Text: "🧑‍💻 Участники MR", CallbackData: callbackData(actionParticipants, channelID)}})
+		}
 		keyboard = append(keyboard,
-			[]models.InlineButton{{Text: "🧑‍💻 Участники MR", CallbackData: callbackData(actionParticipants, channelID)}},
 			[]models.InlineButton{{Text: "🎲 Доска: " + schedule.BoardView.Label(), CallbackData: callbackData(actionBoardView, channelID)}},
 		)
 	}
@@ -155,7 +157,8 @@ func (u *ChannelUseCase) handleCallback(ctx context.Context, update models.Updat
 	}
 	action, arguments := parts[1], parts[3:]
 	argumentCount, known := callbackArgumentCounts[action]
-	if (strings.HasPrefix(action, actionParticipants) || action == actionBoardView) && !u.mrBoard {
+	// Manual mapping is dormant; reject callbacks from old keyboards too.
+	if (strings.HasPrefix(action, actionParticipants) && (!u.mrBoard || !u.manualParticipants)) || (action == actionBoardView && !u.mrBoard) {
 		known = false
 	}
 	channelID, err := strconv.ParseInt(parts[2], 10, 64)

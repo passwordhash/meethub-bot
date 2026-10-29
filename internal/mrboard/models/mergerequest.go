@@ -28,15 +28,16 @@ const (
 )
 
 type MergeRequest struct {
-	ProjectID int64
-	IID       int64
-	Reference string
-	WebURL    string
-	Title     string
-	Author    string
-	Draft     bool
-	UpdatedAt time.Time
-	Reviewers []Reviewer
+	TelegramLabels map[string]string
+	ProjectID      int64
+	IID            int64
+	Reference      string
+	WebURL         string
+	Title          string
+	Author         string
+	Draft          bool
+	UpdatedAt      time.Time
+	Reviewers      []Reviewer
 }
 
 type Reviewer struct {

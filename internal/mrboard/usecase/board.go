@@ -74,16 +74,12 @@ func (u *BoardUseCase) Tick(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("get channels for MR boards: %w", err)
 	}
-	participants, err := u.channels.GetParticipants(ctx, channelmodels.GetParticipantsFilters{})
-	if err != nil {
-		return err
-	}
-	labels := make(map[int64]map[string]string)
-	for _, participant := range participants {
-		if labels[participant.ChannelID] == nil {
-			labels[participant.ChannelID] = make(map[string]string)
+	// Manual participants remain stored, but profiles are the active source for all channels.
+	labels := make(map[string]string)
+	for _, mr := range mrs {
+		for username, label := range mr.TelegramLabels {
+			labels[username] = label
 		}
-		labels[participant.ChannelID][participant.GitLabUsername] = participant.TelegramLabel
 	}
 	boards, err := u.boards.GetBoards(ctx, models.GetBoardsFilters{})
 	if err != nil {
@@ -95,7 +91,7 @@ func (u *BoardUseCase) Tick(ctx context.Context) error {
 	}
 	var failed error
 	for _, channel := range channels {
-		channelLabels := labels[channel.ChannelID]
+		channelLabels := labels
 		board, found := existing[channel.ChannelID]
 		// Clear an existing board after the last participant is removed, but do not create one.
 		if len(channelLabels) == 0 && !found {
