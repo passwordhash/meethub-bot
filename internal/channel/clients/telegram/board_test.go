@@ -115,7 +115,7 @@ func TestRichBoardPayloads(t *testing.T) {
 					t.Errorf("decode request: %v", err)
 				}
 				rich, _ := got["rich_message"].(map[string]any)
-				if rich == nil || rich["format"] != "markdown" || rich["content"] != "| таблица |" {
+				if rich == nil || rich["markdown"] != "| таблица |" {
 					t.Errorf("rich_message = %#v", got["rich_message"])
 				}
 				w.WriteHeader(http.StatusOK)
