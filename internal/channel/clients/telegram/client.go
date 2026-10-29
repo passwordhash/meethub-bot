@@ -331,6 +331,11 @@ func (c *Client) call(ctx context.Context, method string, input, output any) err
 		return errors.Join(ErrAPI, ErrTelegramRejected, ErrMessageNotModified)
 	}
 	if response.StatusCode >= 400 && response.StatusCode < 500 && !result.OK {
+		if response.StatusCode == http.StatusBadRequest &&
+			((method == "editMessageText" && strings.Contains(result.Description, "message to edit not found")) ||
+				(method == "pinChatMessage" && strings.Contains(result.Description, "message to pin not found"))) {
+			return errors.Join(ErrAPI, ErrTelegramRejected, models.ErrBoardMessageMissing)
+		}
 		return errors.Join(ErrAPI, ErrTelegramRejected)
 	}
 	if response.StatusCode != http.StatusOK || !result.OK {

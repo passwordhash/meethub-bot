@@ -123,14 +123,14 @@ func TestTickRecreatesLostBoard(t *testing.T) {
 			name:   "deleted board cannot be edited",
 			stored: "old",
 			expect: func(f *boardFixture, body string) {
-				f.telegram.EXPECT().EditBoard(gomock.Any(), groupID, int64(77), domain.Render(body, now)).Return(errors.Join(errors.New("api"), channelmodels.ErrTelegramRejected))
+				f.telegram.EXPECT().EditBoard(gomock.Any(), groupID, int64(77), domain.Render(body, now)).Return(errors.Join(errors.New("api"), channelmodels.ErrBoardMessageMissing))
 			},
 		},
 		{
 			name: "deleted board cannot be pinned again",
 			expect: func(f *boardFixture, _ string) {
 				f.telegram.EXPECT().PinnedMessageID(gomock.Any(), groupID).Return(int64(0), nil)
-				f.telegram.EXPECT().PinBoard(gomock.Any(), groupID, int64(77)).Return(channelmodels.ErrTelegramRejected)
+				f.telegram.EXPECT().PinBoard(gomock.Any(), groupID, int64(77)).Return(channelmodels.ErrBoardMessageMissing)
 			},
 		},
 	}
@@ -167,6 +167,45 @@ func TestTickRepinsUnpinnedBoard(t *testing.T) {
 	f.telegram.EXPECT().PinBoard(gomock.Any(), groupID, int64(77)).Return(nil)
 	if err := f.uc.Tick(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTickClearsBoardWithoutParticipants(t *testing.T) {
+	f := newBoardFixture(t)
+	f.gitlab.EXPECT().OpenMergeRequests(gomock.Any()).Return(nil, nil)
+	f.boards.EXPECT().GetTracks(gomock.Any()).Return(nil, nil, nil)
+	f.boards.EXPECT().SaveTracks(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	f.channels.EXPECT().GetChannels(gomock.Any(), gomock.Any()).Return([]channelmodels.Channel{{ChannelID: channelID, GroupID: groupID}}, nil)
+	f.channels.EXPECT().GetParticipants(gomock.Any(), gomock.Any()).Return(nil, nil)
+	f.boards.EXPECT().GetBoards(gomock.Any(), gomock.Any()).Return([]models.Board{{ChannelID: channelID, MessageID: 77, Body: "stale MR"}}, nil)
+	body := "Открытых MR команды нет."
+	f.telegram.EXPECT().EditBoard(gomock.Any(), groupID, int64(77), domain.Render(body, now)).Return(nil)
+	f.boards.EXPECT().SaveBoard(gomock.Any(), models.Board{ChannelID: channelID, MessageID: 77, Body: body, UpdatedAt: now}).Return(nil)
+	f.telegram.EXPECT().PinnedMessageID(gomock.Any(), groupID).Return(int64(77), nil)
+	if err := f.uc.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTickDoesNotRecreateOnRejection(t *testing.T) {
+	for _, edit := range []bool{true, false} {
+		t.Run(map[bool]string{true: "edit", false: "pin"}[edit], func(t *testing.T) {
+			f := newBoardFixture(t)
+			body := teamBody()
+			if edit {
+				body = "old"
+			}
+			f.expectPoll([]models.Board{{ChannelID: channelID, MessageID: 77, Body: body}})
+			if edit {
+				f.telegram.EXPECT().EditBoard(gomock.Any(), groupID, int64(77), gomock.Any()).Return(channelmodels.ErrTelegramRejected)
+			} else {
+				f.telegram.EXPECT().PinnedMessageID(gomock.Any(), groupID).Return(int64(0), nil)
+				f.telegram.EXPECT().PinBoard(gomock.Any(), groupID, int64(77)).Return(channelmodels.ErrTelegramRejected)
+			}
+			if err := f.uc.Tick(context.Background()); !errors.Is(err, channelmodels.ErrTelegramRejected) {
+				t.Fatalf("error = %v; want rejection without a new board", err)
+			}
+		})
 	}
 }
 

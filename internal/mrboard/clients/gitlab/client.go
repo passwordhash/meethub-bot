@@ -28,7 +28,11 @@ type Client struct {
 }
 
 func New(baseURL, token, group string) *Client {
-	return &Client{baseURL: strings.TrimRight(baseURL, "/"), token: token, group: group, client: &http.Client{Timeout: 30 * time.Second}}
+	return &Client{baseURL: strings.TrimRight(baseURL, "/"), token: token, group: group, client: &http.Client{
+		Timeout: 30 * time.Second,
+		// PRIVATE-TOKEN must never follow redirects to another endpoint.
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
+	}}
 }
 
 type mergeRequest struct {
@@ -116,8 +120,18 @@ func (c *Client) OpenMergeRequests(ctx context.Context) ([]models.MergeRequest, 
 func (c *Client) reviewers(ctx context.Context, projectID, iid int64) ([]models.Reviewer, error) {
 	var listed []reviewer
 	path := "/projects/" + strconv.FormatInt(projectID, 10) + "/merge_requests/" + strconv.FormatInt(iid, 10) + "/reviewers"
-	if _, err := c.get(ctx, path, nil, &listed); err != nil {
-		return nil, err
+	page := "1"
+	for pages := 0; page != ""; pages++ {
+		if pages == maxPages {
+			return nil, fmt.Errorf("%w: too many reviewer pages", ErrAPI)
+		}
+		var batch []reviewer
+		next, err := c.get(ctx, path, url.Values{"per_page": {"100"}, "page": {page}}, &batch)
+		if err != nil {
+			return nil, err
+		}
+		listed = append(listed, batch...)
+		page = next
 	}
 	result := make([]models.Reviewer, 0, len(listed))
 	for _, entry := range listed {

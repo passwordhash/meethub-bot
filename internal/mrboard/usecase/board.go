@@ -95,13 +95,13 @@ func (u *BoardUseCase) Tick(ctx context.Context) error {
 	}
 	var failed error
 	for _, channel := range channels {
-		// A channel without participants has no team, so it gets no board.
 		channelLabels := labels[channel.ChannelID]
-		if len(channelLabels) == 0 {
+		board, found := existing[channel.ChannelID]
+		// Clear an existing board after the last participant is removed, but do not create one.
+		if len(channelLabels) == 0 && !found {
 			continue
 		}
 		body := domain.RenderBody(domain.Items(mrs, reviewers, sections, channelLabels, now), channelLabels, now)
-		board, found := existing[channel.ChannelID]
 		if err := u.sync(ctx, channel, board, found, body, now); err != nil {
 			slog.Warn("MR board sync failed", "channel_id", channel.ChannelID, "error", err)
 			failed = errors.Join(failed, err)
@@ -116,7 +116,7 @@ func (u *BoardUseCase) sync(ctx context.Context, channel channelmodels.Channel, 
 	}
 	if body != board.Body {
 		err := u.telegram.EditBoard(ctx, channel.GroupID, board.MessageID, domain.Render(body, now))
-		if errors.Is(err, channelmodels.ErrTelegramRejected) {
+		if errors.Is(err, channelmodels.ErrBoardMessageMissing) {
 			return u.create(ctx, channel, body, now)
 		}
 		if err != nil {
@@ -135,7 +135,7 @@ func (u *BoardUseCase) sync(ctx context.Context, channel channelmodels.Channel, 
 		return nil
 	}
 	err = u.telegram.PinBoard(ctx, channel.GroupID, board.MessageID)
-	if errors.Is(err, channelmodels.ErrTelegramRejected) {
+	if errors.Is(err, channelmodels.ErrBoardMessageMissing) {
 		return u.create(ctx, channel, board.Body, now)
 	}
 	if err != nil {

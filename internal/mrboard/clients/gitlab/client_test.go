@@ -52,7 +52,7 @@ func TestOpenMergeRequests(t *testing.T) {
 	wantRequests := []string{
 		"/api/v4/groups/money-mania%2Fteam/merge_requests?page=1&per_page=100&state=opened",
 		"/api/v4/groups/money-mania%2Fteam/merge_requests?page=2&per_page=100&state=opened",
-		"/api/v4/projects/1/merge_requests/406/reviewers?",
+		"/api/v4/projects/1/merge_requests/406/reviewers?page=1&per_page=100",
 	}
 	if !reflect.DeepEqual(requests, wantRequests) {
 		t.Fatalf("requests = %v; want %v", requests, wantRequests)
@@ -73,6 +73,14 @@ func TestOpenMergeRequestsErrors(t *testing.T) {
 			}
 			w.WriteHeader(http.StatusInternalServerError)
 		}},
+		{"endless reviewer pages", func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/v4/groups/g/merge_requests" {
+				_, _ = w.Write([]byte(`[{"project_id":1,"iid":1,"reviewers":[{"username":"a"}]}]`))
+				return
+			}
+			w.Header().Set("X-Next-Page", "2")
+			_, _ = w.Write([]byte(`[]`))
+		}},
 		{"endless pages", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("X-Next-Page", "2")
 			_, _ = w.Write([]byte(`[]`))
@@ -86,6 +94,53 @@ func TestOpenMergeRequestsErrors(t *testing.T) {
 				t.Fatalf("error = %v; want ErrAPI", err)
 			}
 		})
+	}
+}
+
+func TestTokenIsNotForwardedOnRedirect(t *testing.T) {
+	forwarded := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		forwarded = r.Header.Get("PRIVATE-TOKEN") != ""
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer target.Close()
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusFound)
+	}))
+	defer origin.Close()
+	_, err := New(origin.URL, "secret", "g").OpenMergeRequests(context.Background())
+	if forwarded {
+		t.Fatal("PRIVATE-TOKEN leaked through a redirect")
+	}
+	if !errors.Is(err, ErrAPI) {
+		t.Fatalf("redirect error = %v; want ErrAPI", err)
+	}
+}
+
+func TestReviewersPagination(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/g/merge_requests" {
+			_, _ = w.Write([]byte(`[{"project_id":1,"iid":1,"reviewers":[{"username":"a"}]}]`))
+			return
+		}
+		switch r.URL.Query().Get("page") {
+		case "1":
+			w.Header().Set("X-Next-Page", "2")
+			_, _ = w.Write([]byte(`[{"user":{"username":"a"},"state":"approved"}]`))
+		case "2":
+			_, _ = w.Write([]byte(`[{"user":{"username":"b"},"state":"requested_changes"}]`))
+		default:
+			t.Error("reviewer request must specify a page")
+			_, _ = w.Write([]byte(`[]`))
+		}
+	}))
+	defer server.Close()
+	mrs, err := New(server.URL, "token", "g").OpenMergeRequests(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mrs) != 1 || len(mrs[0].Reviewers) != 2 || mrs[0].Reviewers[1].State != models.StateRequestedChanges {
+		t.Fatalf("reviewers were truncated: %+v", mrs)
 	}
 }
 

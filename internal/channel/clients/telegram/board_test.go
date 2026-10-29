@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/passwordhash/cascade-hub-bot/internal/channel/models"
 )
 
 func TestPinPermission(t *testing.T) {
@@ -52,7 +54,10 @@ func TestBoardRequests(t *testing.T) {
 		wantError error
 	}{
 		{name: "unchanged edit is success", status: http.StatusBadRequest, body: `{"ok":false,"description":"Bad Request: message is not modified: specified new message content and reply markup are exactly the same"}`, method: "editMessageText", run: func(c *Client) error { return c.EditBoard(context.Background(), -1, 5, "text") }},
-		{name: "deleted message is rejected", status: http.StatusBadRequest, body: `{"ok":false,"description":"Bad Request: message to edit not found"}`, method: "editMessageText", run: func(c *Client) error { return c.EditBoard(context.Background(), -1, 5, "text") }, wantError: ErrTelegramRejected},
+		{name: "deleted message is rejected", status: http.StatusBadRequest, body: `{"ok":false,"description":"Bad Request: message to edit not found"}`, method: "editMessageText", run: func(c *Client) error { return c.EditBoard(context.Background(), -1, 5, "text") }, wantError: models.ErrBoardMessageMissing},
+		{name: "deleted pin target", status: http.StatusBadRequest, body: `{"ok":false,"description":"Bad Request: message to pin not found"}`, method: "pinChatMessage", run: func(c *Client) error { return c.PinBoard(context.Background(), -1, 5) }, wantError: models.ErrBoardMessageMissing},
+		{name: "rate limited edit", status: http.StatusTooManyRequests, body: `{"ok":false,"description":"Too Many Requests: retry after 30"}`, method: "editMessageText", run: func(c *Client) error { return c.EditBoard(context.Background(), -1, 5, "text") }, wantError: ErrTelegramRejected},
+		{name: "forbidden pin", status: http.StatusForbidden, body: `{"ok":false,"description":"Forbidden: bot is not a member"}`, method: "pinChatMessage", run: func(c *Client) error { return c.PinBoard(context.Background(), -1, 5) }, wantError: ErrTelegramRejected},
 		{name: "pin", status: http.StatusOK, body: `{"ok":true,"result":true}`, method: "pinChatMessage", run: func(c *Client) error { return c.PinBoard(context.Background(), -1, 5) }},
 		{name: "pinned message", status: http.StatusOK, body: `{"ok":true,"result":{"id":-1,"type":"supergroup","pinned_message":{"message_id":5}}}`, method: "getChat", run: func(c *Client) error {
 			id, err := c.PinnedMessageID(context.Background(), -1)
@@ -74,8 +79,12 @@ func TestBoardRequests(t *testing.T) {
 			defer server.Close()
 			client := New("token")
 			client.endpoint = server.URL
-			if err := tt.run(client); !errors.Is(err, tt.wantError) || (tt.wantError == nil && err != nil) {
+			err := tt.run(client)
+			if !errors.Is(err, tt.wantError) || (tt.wantError == nil && err != nil) {
 				t.Fatalf("error = %v; want %v", err, tt.wantError)
+			}
+			if tt.wantError != models.ErrBoardMessageMissing && errors.Is(err, models.ErrBoardMessageMissing) {
+				t.Fatalf("non-missing error permits board recreation: %v", err)
 			}
 		})
 	}
