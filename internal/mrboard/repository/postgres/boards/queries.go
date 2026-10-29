@@ -9,7 +9,7 @@ import (
 
 func getBoardsQuery(filters models.GetBoardsFilters) (string, pgx.NamedArgs) {
 	query := `-- getBoardsQuery
-SELECT channel_id, message_id, body, updated_at FROM channel_mr_boards`
+SELECT channel_id, message_id, body, format, updated_at FROM channel_mr_boards`
 	args := pgx.NamedArgs{}
 	if filters.ChannelID != nil {
 		query += `
@@ -21,10 +21,10 @@ WHERE channel_id = @channel_id`
 
 func saveBoardQuery(board models.Board) (string, pgx.NamedArgs) {
 	return `-- saveBoardQuery
-INSERT INTO channel_mr_boards (channel_id, message_id, body, updated_at)
-VALUES (@channel_id, @message_id, @body, @updated_at)
-ON CONFLICT (channel_id) DO UPDATE SET message_id = EXCLUDED.message_id, body = EXCLUDED.body, updated_at = EXCLUDED.updated_at`,
-		pgx.NamedArgs{"channel_id": board.ChannelID, "message_id": board.MessageID, "body": board.Body, "updated_at": board.UpdatedAt}
+INSERT INTO channel_mr_boards (channel_id, message_id, body, format, updated_at)
+VALUES (@channel_id, @message_id, @body, @format, @updated_at)
+ON CONFLICT (channel_id) DO UPDATE SET message_id = EXCLUDED.message_id, body = EXCLUDED.body, format = EXCLUDED.format, updated_at = EXCLUDED.updated_at`,
+		pgx.NamedArgs{"channel_id": board.ChannelID, "message_id": board.MessageID, "body": board.Body, "format": string(board.Format), "updated_at": board.UpdatedAt}
 }
 
 func getReviewerTracksQuery() string {
@@ -72,7 +72,7 @@ WITH reviewers AS (
 INSERT INTO mr_sections (project_id, mr_iid, section, since)
 SELECT project_id, mr_iid, section, since FROM sections
 ON CONFLICT (project_id, mr_iid) DO UPDATE SET section = EXCLUDED.section, since = EXCLUDED.since`, pgx.NamedArgs{
-		"reviewer_projects": reviewerProjects, "reviewer_iids": reviewerIIDs, "usernames": usernames, "states": states, "reviewed_once": reviewedOnce, "changed_at": changedAt,
-		"section_projects": sectionProjects, "section_iids": sectionIIDs, "sections": sectionValues, "since": since,
-	}
+			"reviewer_projects": reviewerProjects, "reviewer_iids": reviewerIIDs, "usernames": usernames, "states": states, "reviewed_once": reviewedOnce, "changed_at": changedAt,
+			"section_projects": sectionProjects, "section_iids": sectionIIDs, "sections": sectionValues, "since": since,
+		}
 }

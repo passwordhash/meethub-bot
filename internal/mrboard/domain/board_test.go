@@ -2,11 +2,13 @@ package domain
 
 import (
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
 
+	channelmodels "github.com/passwordhash/cascade-hub-bot/internal/channel/models"
 	"github.com/passwordhash/cascade-hub-bot/internal/mrboard/models"
 )
 
@@ -167,10 +169,10 @@ func TestFormatAge(t *testing.T) {
 func TestRenderBoard(t *testing.T) {
 	participants := map[string]string{"tema": "Тёма", "yarik": "@yarik", "dima": "Дима", "danya": "Даня", "lesha": "Лёша"}
 	mrs := []models.MergeRequest{
-		{ProjectID: 1, IID: 406, Reference: "cascade!406", Title: "лимит 10000", Author: "tema", Reviewers: reviewers("yarik", "unreviewed")},
-		{ProjectID: 2, IID: 8, Reference: "support-bot!8", Title: "сапорт бота", Author: "dima", Reviewers: reviewers("yarik", "unreviewed")},
-		{ProjectID: 1, IID: 410, Reference: "cascade!410", Title: "Dofobet", Author: "danya", Reviewers: reviewers("dima", "requested_changes", "stranger", "approved")},
-		{ProjectID: 1, IID: 399, Reference: "cascade!399", Title: "ProxyPay", Author: "lesha", Reviewers: reviewers("yarik", "approved")},
+		{ProjectID: 1, IID: 406, Reference: "cascade!406", WebURL: "https://gitlab.example/team/cascade/-/merge_requests/406", Title: "лимит 10000", Author: "tema", Reviewers: reviewers("yarik", "unreviewed")},
+		{ProjectID: 2, IID: 8, Reference: "support-bot!8", WebURL: "https://gitlab.example/team/support-bot/-/merge_requests/8", Title: "сапорт бота", Author: "dima", Reviewers: reviewers("yarik", "unreviewed")},
+		{ProjectID: 1, IID: 410, Reference: "cascade!410", WebURL: "https://gitlab.example/team/cascade/-/merge_requests/410", Title: "Dofobet", Author: "danya", Reviewers: reviewers("dima", "requested_changes", "stranger", "approved")},
+		{ProjectID: 1, IID: 399, Reference: "cascade!399", WebURL: "https://gitlab.example/team/cascade/-/merge_requests/399", Title: "ProxyPay", Author: "lesha", Reviewers: reviewers("yarik", "approved")},
 		{ProjectID: 1, IID: 500, Reference: "cascade!500", Title: "чужой", Author: "x", Reviewers: reviewers("y", "unreviewed")},
 	}
 	reviewerTracks := []models.ReviewerTrack{{ProjectID: 2, IID: 8, Username: "yarik", State: models.StateUnreviewed, ReviewedOnce: true}}
@@ -181,43 +183,133 @@ func TestRenderBoard(t *testing.T) {
 		{ProjectID: 1, IID: 399, Since: now.Add(-5 * time.Hour)},
 	}
 	items := Items(mrs, reviewerTracks, sectionTracks, participants, now)
-	got := Render(RenderBody(items, participants, now), now)
-	want := `📋 MR команды · обновлено 14:32
+	tests := []struct {
+		name string
+		view channelmodels.BoardView
+		want string
+	}{
+		{
+			name: "by balls",
+			view: channelmodels.BoardViewBalls,
+			want: `**👀 Ждёт ревью**
 
-👀 Ждёт ревью
-• cascade!406 лимит 10000 — Тёма → @yarik · 2д
-• support-bot!8 сапорт бота — Дима → @yarik 🔁 · 3ч
+| MR | Титул | Кто | ⏱ |
+|---|---|---|---|
+| [cascade!406](https://gitlab.example/team/cascade/-/merge_requests/406) | лимит 10000 | Тёма → @yarik | 2д |
+| [support-bot!8](https://gitlab.example/team/support-bot/-/merge_requests/8) | сапорт бота | Дима → @yarik 🔁 | 3ч |
 
-✍️ Ждёт правок автора
-• cascade!410 Dofobet — Даня ← Дима ✍️, stranger ✅ · 1д
+**✍️ Ждёт правок автора**
 
-✅ Апрув, ждёт merge
-• cascade!399 ProxyPay — Лёша · @yarik ✅ · 5ч`
-	if got != want {
-		t.Fatalf("board =\n%s\nwant\n%s", got, want)
+| MR | Титул | Кто | ⏱ |
+|---|---|---|---|
+| [cascade!410](https://gitlab.example/team/cascade/-/merge_requests/410) | Dofobet | Даня ← Дима ✍️, stranger ✅ | 1д |
+
+**✅ Апрув, ждёт merge**
+
+| MR | Титул | Кто | ⏱ |
+|---|---|---|---|
+| [cascade!399](https://gitlab.example/team/cascade/-/merge_requests/399) | ProxyPay | Лёша · @yarik ✅ | 5ч |`,
+		},
+		{
+			name: "by reviewer",
+			view: channelmodels.BoardViewReviewer,
+			want: `**👀 Ждёт ревью**
+
+**@yarik смотрит**
+
+| MR | Титул | Кто | ⏱ |
+|---|---|---|---|
+| [cascade!406](https://gitlab.example/team/cascade/-/merge_requests/406) | лимит 10000 | Тёма → @yarik | 2д |
+| [support-bot!8](https://gitlab.example/team/support-bot/-/merge_requests/8) | сапорт бота | Дима → @yarik 🔁 | 3ч |
+
+**✍️ Ждёт правок автора**
+
+**Даня должен**
+
+| MR | Титул | Кто | ⏱ |
+|---|---|---|---|
+| [cascade!410](https://gitlab.example/team/cascade/-/merge_requests/410) | Dofobet | Даня ← Дима ✍️, stranger ✅ | 1д |
+
+**✅ Апрув, ждёт merge**
+
+| MR | Титул | Кто | ⏱ |
+|---|---|---|---|
+| [cascade!399](https://gitlab.example/team/cascade/-/merge_requests/399) | ProxyPay | Лёша · @yarik ✅ | 5ч |`,
+		},
+		{
+			name: "by project",
+			view: channelmodels.BoardViewProject,
+			want: `**cascade**
+
+| MR | Титул | ⚡ | Кто | ⏱ |
+|---|---|---|---|---|
+| [cascade!406](https://gitlab.example/team/cascade/-/merge_requests/406) | лимит 10000 | 👀 | Тёма → @yarik | 2д |
+| [cascade!410](https://gitlab.example/team/cascade/-/merge_requests/410) | Dofobet | ✍️ | Даня ← Дима ✍️, stranger ✅ | 1д |
+| [cascade!399](https://gitlab.example/team/cascade/-/merge_requests/399) | ProxyPay | ✅ | Лёша · @yarik ✅ | 5ч |
+
+**support-bot**
+
+| MR | Титул | ⚡ | Кто | ⏱ |
+|---|---|---|---|---|
+| [support-bot!8](https://gitlab.example/team/support-bot/-/merge_requests/8) | сапорт бота | 👀 | Дима → @yarik 🔁 | 3ч |`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Render(RenderBody(items, participants, tt.view, now), now)
+			if want := "📋 MR команды · обновлено 14:32\n\n" + tt.want; got != want {
+				t.Fatalf("board =\n%s\nwant\n%s", got, want)
+			}
+		})
 	}
 }
 
 func TestRenderEmptyBoard(t *testing.T) {
-	if got := RenderBody(nil, nil, now); got != "Открытых MR команды нет." {
+	if got := RenderBody(nil, nil, channelmodels.BoardViewBalls, now); got != "Открытых MR команды нет." {
 		t.Fatalf("empty body = %q", got)
 	}
 }
 
-func TestRenderBodyFitsTelegramLimit(t *testing.T) {
+func TestCellTitle(t *testing.T) {
+	tests := []struct {
+		name  string
+		title string
+		want  string
+	}{
+		{name: "short title is kept", title: "фикс платежей", want: "фикс платежей"},
+		{name: "long title is cut to 48 runes plus ellipsis", title: strings.Repeat("а", 50), want: strings.Repeat("а", 48) + "…"},
+		{name: "pipes are escaped for the table", title: "a | b | c", want: `a \| b \| c`},
+		{name: "newlines are flattened", title: "a\nb", want: "a b"},
+		{name: "spaces are trimmed", title: "  титул ", want: "титул"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := cellTitle(tt.title); got != tt.want {
+				t.Fatalf("cellTitle = %q; want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRenderBodyKeepsEveryMergeRequest(t *testing.T) {
 	items := make([]Item, 0, 200)
 	for index := range 200 {
 		items = append(items, Item{
-			MergeRequest: models.MergeRequest{Reference: "project!1", Title: strings.Repeat("т", 40), Author: "author", Reviewers: reviewers("reviewer", "unreviewed")},
+			MergeRequest: models.MergeRequest{Reference: "project!" + strconv.Itoa(index+1), Title: strings.Repeat("т", 40), Author: "author", Reviewers: reviewers("reviewer", "unreviewed")},
 			Section:      models.SectionAwaitingReview,
 			Since:        now.Add(-time.Duration(index) * time.Minute),
 		})
 	}
-	body := RenderBody(items, nil, now)
-	if !strings.HasSuffix(body, " MR") || !strings.Contains(body, "…и ещё ") {
-		t.Fatalf("truncated body has no counter: %q", body[len(body)-40:])
+	body := RenderBody(items, nil, channelmodels.BoardViewBalls, now)
+	if strings.Contains(body, "…и ещё") {
+		t.Fatal("rich board is truncated")
 	}
-	if length := utf8.RuneCountInString(Render(body, now)); length > MaxMessageLength {
-		t.Fatalf("board length = %d", length)
+	for index := range 200 {
+		if !strings.Contains(body, "project!"+strconv.Itoa(index+1)) {
+			t.Fatalf("merge request %d is missing", index+1)
+		}
+	}
+	if length := utf8.RuneCountInString(body); length > 32768 {
+		t.Fatalf("board length = %d exceeds the rich message limit", length)
 	}
 }

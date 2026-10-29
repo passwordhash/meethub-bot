@@ -42,6 +42,7 @@ type mergeRequest struct {
 	Draft           bool      `json:"draft"`
 	WorkInProgress  bool      `json:"work_in_progress"`
 	UpdatedAt       time.Time `json:"updated_at"`
+	WebURL          string    `json:"web_url"`
 	Author          account   `json:"author"`
 	Reviewers       []account `json:"reviewers"`
 	ReferenceFields struct {
@@ -103,7 +104,7 @@ func (c *Client) OpenMergeRequests(ctx context.Context) ([]models.MergeRequest, 
 	for _, listedMR := range listed {
 		mr := models.MergeRequest{
 			ProjectID: listedMR.ProjectID, IID: listedMR.IID, Reference: shortReference(listedMR.ReferenceFields.Full, listedMR.IID),
-			Title: listedMR.Title, Author: listedMR.Author.Username, Draft: listedMR.Draft || listedMR.WorkInProgress, UpdatedAt: listedMR.UpdatedAt,
+			WebURL: listedMR.WebURL, Title: listedMR.Title, Author: listedMR.Author.Username, Draft: listedMR.Draft || listedMR.WorkInProgress, UpdatedAt: listedMR.UpdatedAt,
 		}
 		if !mr.Draft && len(listedMR.Reviewers) > 0 {
 			reviewers, err := c.reviewers(ctx, mr.ProjectID, mr.IID)

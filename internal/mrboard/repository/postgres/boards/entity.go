@@ -6,6 +6,7 @@ type boardEntity struct {
 	ChannelID int64     `db:"channel_id"`
 	MessageID int64     `db:"message_id"`
 	Body      string    `db:"body"`
+	Format    string    `db:"format"`
 	UpdatedAt time.Time `db:"updated_at"`
 }
 

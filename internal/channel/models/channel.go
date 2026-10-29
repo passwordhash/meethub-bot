@@ -18,6 +18,7 @@ var ErrInvalidUserID = errors.New("invalid user id")
 type Channel struct {
 	ChannelID int64
 	GroupID   int64
+	BoardView BoardView
 }
 
 type GetChannelsFilters struct {
@@ -32,6 +33,40 @@ type Schedule struct {
 	LeadEnabled       bool
 	ResetPending      bool
 	CheckedAt         *time.Time
+	BoardView         BoardView
+}
+
+// BoardView picks how the MR board groups its rows.
+type BoardView int16
+
+const (
+	BoardViewBalls    BoardView = 1
+	BoardViewReviewer BoardView = 2
+	BoardViewProject  BoardView = 3
+)
+
+// Label names the view on the owner menu button; an unset view reads as the default.
+func (v BoardView) Label() string {
+	switch v {
+	case BoardViewReviewer:
+		return "по ревьюверу"
+	case BoardViewProject:
+		return "по проекту"
+	default:
+		return "по мячам"
+	}
+}
+
+// Next cycles through the views for the owner menu button.
+func (v BoardView) Next() BoardView {
+	switch v {
+	case BoardViewBalls:
+		return BoardViewReviewer
+	case BoardViewReviewer:
+		return BoardViewProject
+	default:
+		return BoardViewBalls
+	}
 }
 
 type GetSchedulesFilters struct {

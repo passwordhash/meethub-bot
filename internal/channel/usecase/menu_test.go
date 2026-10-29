@@ -384,9 +384,46 @@ func TestChannelScreenWithMRBoard(t *testing.T) {
 	f.expectSchedule(models.Schedule{ChannelID: testChannelID})
 	f.callback("ui:ch:-1001234567890")
 	got := f.lastKeyboard()
-	if row := got[len(got)-2]; row[0].Text != "🧑‍💻 Участники MR" || row[0].CallbackData != "ui:prt:-1001234567890" {
+	if row := got[len(got)-3]; row[0].Text != "🧑‍💻 Участники MR" || row[0].CallbackData != "ui:prt:-1001234567890" {
 		t.Fatalf("participants button = %+v", row)
 	}
+	if row := got[len(got)-2]; row[0].Text != "🎲 Доска: по мячам" || row[0].CallbackData != "ui:view:-1001234567890" {
+		t.Fatalf("board view button = %+v", row)
+	}
+}
+
+func TestBoardViewCycles(t *testing.T) {
+	f := newMenuFixture(t)
+	f.uc.EnableMRBoard()
+	f.expectSchedule(models.Schedule{ChannelID: testChannelID, BoardView: models.BoardViewBalls})
+	f.repository.EXPECT().SetBoardView(gomock.Any(), testChannelID, models.BoardViewReviewer).Return(nil)
+	f.expectSchedule(models.Schedule{ChannelID: testChannelID, BoardView: models.BoardViewReviewer})
+	f.callback("ui:view:-1001234567890")
+	if got := f.lastKeyboard(); got[len(got)-2][0].Text != "🎲 Доска: по ревьюверу" {
+		t.Fatalf("view button after cycle = %+v", got[len(got)-2])
+	}
+
+	f.expectSchedule(models.Schedule{ChannelID: testChannelID, BoardView: models.BoardViewReviewer})
+	f.repository.EXPECT().SetBoardView(gomock.Any(), testChannelID, models.BoardViewProject).Return(nil)
+	f.expectSchedule(models.Schedule{ChannelID: testChannelID, BoardView: models.BoardViewProject})
+	f.callback("ui:view:-1001234567890")
+	if got := f.lastKeyboard(); got[len(got)-2][0].Text != "🎲 Доска: по проекту" {
+		t.Fatalf("view button after second cycle = %+v", got[len(got)-2])
+	}
+
+	f.expectSchedule(models.Schedule{ChannelID: testChannelID, BoardView: models.BoardViewProject})
+	f.repository.EXPECT().SetBoardView(gomock.Any(), testChannelID, models.BoardViewBalls).Return(nil)
+	f.expectSchedule(models.Schedule{ChannelID: testChannelID, BoardView: models.BoardViewBalls})
+	f.callback("ui:view:-1001234567890")
+	if got := f.lastKeyboard(); got[len(got)-2][0].Text != "🎲 Доска: по мячам" {
+		t.Fatalf("view button after third cycle = %+v", got[len(got)-2])
+	}
+}
+
+func TestBoardViewDisabledWithoutGitLab(t *testing.T) {
+	f := newMenuFixture(t)
+	f.telegram.EXPECT().Send(gomock.Any(), int64(1), staleButtonResponse).Return(nil)
+	f.callback("ui:view:-1001234567890")
 }
 
 func TestParticipantsMenuDisabledWithoutGitLab(t *testing.T) {

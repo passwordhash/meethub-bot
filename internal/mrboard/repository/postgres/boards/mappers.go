@@ -3,7 +3,7 @@ package boards
 import "github.com/passwordhash/cascade-hub-bot/internal/mrboard/models"
 
 func boardEntityToModel(entity boardEntity) models.Board {
-	return models.Board{ChannelID: entity.ChannelID, MessageID: entity.MessageID, Body: entity.Body, UpdatedAt: entity.UpdatedAt}
+	return models.Board{ChannelID: entity.ChannelID, MessageID: entity.MessageID, Body: entity.Body, Format: models.BoardFormat(entity.Format), UpdatedAt: entity.UpdatedAt}
 }
 
 func reviewerTrackEntityToModel(entity reviewerTrackEntity) models.ReviewerTrack {
