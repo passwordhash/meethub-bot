@@ -384,8 +384,10 @@ func TestChannelScreenWithMRBoard(t *testing.T) {
 	f.expectSchedule(models.Schedule{ChannelID: testChannelID})
 	f.callback("ui:ch:-1001234567890")
 	got := f.lastKeyboard()
-	if row := got[len(got)-3]; row[0].Text != "🧑‍💻 Участники MR" || row[0].CallbackData != "ui:prt:-1001234567890" {
-		t.Fatalf("participants button = %+v", row)
+	for _, row := range got {
+		if strings.HasPrefix(row[0].CallbackData, "ui:prt") {
+			t.Fatalf("manual participants button is enabled: %+v", row)
+		}
 	}
 	if row := got[len(got)-2]; row[0].Text != "🎲 Доска: по мячам" || row[0].CallbackData != "ui:view:-1001234567890" {
 		t.Fatalf("board view button = %+v", row)
@@ -432,9 +434,24 @@ func TestParticipantsMenuDisabledWithoutGitLab(t *testing.T) {
 	f.callback("ui:prt:-1001234567890")
 }
 
+func TestManualParticipantsDisabledWithGitLab(t *testing.T) {
+	for _, callback := range []string{"ui:prt:-1001234567890", "ui:prta:-1001234567890", "ui:prtd:-1001234567890:yarik"} {
+		t.Run(callback, func(t *testing.T) {
+			f := newMenuFixture(t)
+			f.uc.EnableMRBoard()
+			f.telegram.EXPECT().Send(gomock.Any(), int64(1), staleButtonResponse).Return(nil)
+			f.callback(callback)
+			if len(f.uc.pending) != 0 {
+				t.Fatal("manual input enabled")
+			}
+		})
+	}
+}
+
 func TestParticipantsMenu(t *testing.T) {
 	f := newMenuFixture(t)
 	f.uc.EnableMRBoard()
+	f.uc.manualParticipants = true
 	filters := models.GetParticipantsFilters{ChannelID: ptr(testChannelID)}
 	f.repository.EXPECT().GetParticipants(gomock.Any(), filters).Return(nil, nil)
 	f.callback("ui:prt:-1001234567890")

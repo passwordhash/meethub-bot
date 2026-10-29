@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,8 @@ var ErrAPI = errors.New("gitlab API request failed")
 
 // maxPages bounds pagination so a misbehaving server cannot keep the poll busy forever.
 const maxPages = 50
+
+var telegramUsername = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{4,31}$`)
 
 type Client struct {
 	baseURL string
@@ -51,6 +54,7 @@ type mergeRequest struct {
 }
 
 type account struct {
+	ID       int64  `json:"id"`
 	Username string `json:"username"`
 }
 
@@ -100,6 +104,7 @@ func (c *Client) OpenMergeRequests(ctx context.Context) ([]models.MergeRequest, 
 		listed = append(listed, batch...)
 		page = next
 	}
+	labels := make(map[int64]string)
 	result := make([]models.MergeRequest, 0, len(listed))
 	for _, listedMR := range listed {
 		mr := models.MergeRequest{
@@ -112,6 +117,36 @@ func (c *Client) OpenMergeRequests(ctx context.Context) ([]models.MergeRequest, 
 				return nil, err
 			}
 			mr.Reviewers = reviewers
+		}
+		if !mr.Draft && len(mr.Reviewers) > 0 {
+			accounts := append([]account{listedMR.Author}, listedMR.Reviewers...)
+			for _, user := range accounts {
+				if user.ID == 0 {
+					continue
+				}
+				label, found := labels[user.ID]
+				if !found {
+					var profile struct {
+						Twitter string `json:"twitter"`
+					}
+					if _, err := c.get(ctx, "/users/"+strconv.FormatInt(user.ID, 10), nil, &profile); err != nil {
+						return nil, err
+					}
+					label = strings.TrimPrefix(strings.TrimSpace(profile.Twitter), "@")
+					if telegramUsername.MatchString(label) {
+						label = "@" + label
+					} else {
+						label = ""
+					}
+					labels[user.ID] = label
+				}
+				if label != "" {
+					if mr.TelegramLabels == nil {
+						mr.TelegramLabels = make(map[string]string)
+					}
+					mr.TelegramLabels[strings.ToLower(user.Username)] = label
+				}
+			}
 		}
 		result = append(result, mr)
 	}
