@@ -40,7 +40,7 @@ func TestScheduleGridPostgres(t *testing.T) {
 	if _, err := db.Exec(ctx, `INSERT INTO channels (channel_id, linked_chat_id) VALUES (-10, -1010)`); err != nil {
 		t.Fatal(err)
 	}
-	applyMigrations(t, ctx, db, 10, 13)
+	applyMigrations(t, ctx, db, 10, 14)
 	repository := New(postgres.NewGetter(db))
 
 	ten := 10 * time.Hour
@@ -82,7 +82,7 @@ func TestScheduleGridPostgres(t *testing.T) {
 func TestScheduleEditsPostgres(t *testing.T) {
 	ctx := context.Background()
 	db := isolatedDatabase(t)
-	applyMigrations(t, ctx, db, 1, 13)
+	applyMigrations(t, ctx, db, 1, 14)
 	if _, err := db.Exec(ctx, `INSERT INTO channels (channel_id, linked_chat_id, schedule_reset_pending) VALUES (-1, -11, TRUE), (-2, -12, FALSE)`); err != nil {
 		t.Fatal(err)
 	}
@@ -156,6 +156,30 @@ func TestScheduleEditsPostgres(t *testing.T) {
 	if view := load().BoardView; view != models.BoardViewProject {
 		t.Fatalf("board view = %d; want %d", view, models.BoardViewProject)
 	}
+	if load().BoardPinLast {
+		t.Fatal("pin setting must default to false")
+	}
+	if err := repository.SetBoardPinLast(ctx, channelID, true); err != nil {
+		t.Fatal(err)
+	}
+	if !load().BoardPinLast {
+		t.Fatal("pin setting was not saved")
+	}
+	channels, err := repository.GetChannels(ctx, models.GetChannelsFilters{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, channel := range channels {
+		if channel.BoardPinLast != (channel.ChannelID == channelID) {
+			t.Fatalf("unexpected channel pin setting: %+v", channel)
+		}
+	}
+	if err := repository.SetBoardPinLast(ctx, channelID, false); err != nil {
+		t.Fatal(err)
+	}
+	if load().BoardPinLast {
+		t.Fatal("pin setting was not disabled")
+	}
 
 	missing := int64(-99)
 	for name, err := range map[string]error{
@@ -174,7 +198,7 @@ func TestScheduleEditsPostgres(t *testing.T) {
 func TestIgnoredUsersPostgres(t *testing.T) {
 	ctx := context.Background()
 	db := isolatedDatabase(t)
-	applyMigrations(t, ctx, db, 1, 13)
+	applyMigrations(t, ctx, db, 1, 14)
 	if _, err := db.Exec(ctx, `INSERT INTO channels (channel_id, linked_chat_id) VALUES (-1, -11), (-2, -12)`); err != nil {
 		t.Fatal(err)
 	}

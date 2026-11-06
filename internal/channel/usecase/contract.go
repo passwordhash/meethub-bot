@@ -18,6 +18,7 @@ type ChannelRepository interface {
 	SetPostOffset(context.Context, int64, int) error
 	SetLeadEnabled(context.Context, int64, bool) error
 	SetBoardView(context.Context, int64, models.BoardView) error
+	SetBoardPinLast(context.Context, int64, bool) error
 	ClearScheduleReset(context.Context, int64) error
 	GetIgnoredUsers(context.Context, models.GetIgnoredUsersFilters) ([]models.IgnoredUser, error)
 	AddIgnoredUser(context.Context, int64, int64) error

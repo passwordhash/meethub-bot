@@ -173,6 +173,20 @@ func (mr *MockChannelRepositoryMockRecorder) GetSchedules(arg0, arg1 any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSchedules", reflect.TypeOf((*MockChannelRepository)(nil).GetSchedules), arg0, arg1)
 }
 
+// SetBoardPinLast mocks base method.
+func (m *MockChannelRepository) SetBoardPinLast(arg0 context.Context, arg1 int64, arg2 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetBoardPinLast", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetBoardPinLast indicates an expected call of SetBoardPinLast.
+func (mr *MockChannelRepositoryMockRecorder) SetBoardPinLast(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBoardPinLast", reflect.TypeOf((*MockChannelRepository)(nil).SetBoardPinLast), arg0, arg1, arg2)
+}
+
 // SetBoardView mocks base method.
 func (m *MockChannelRepository) SetBoardView(arg0 context.Context, arg1 int64, arg2 models.BoardView) error {
 	m.ctrl.T.Helper()

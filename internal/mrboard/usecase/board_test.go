@@ -174,11 +174,43 @@ func TestTickRepinsUnpinnedBoard(t *testing.T) {
 	f.gitlab.EXPECT().OpenMergeRequests(gomock.Any()).Return(nil, nil)
 	f.boards.EXPECT().GetTracks(gomock.Any()).Return(nil, nil, nil)
 	f.boards.EXPECT().SaveTracks(gomock.Any(), gomock.Len(0), gomock.Len(0)).Return(nil)
-	f.channels.EXPECT().GetChannels(gomock.Any(), gomock.Any()).Return([]channelmodels.Channel{{ChannelID: channelID, GroupID: groupID}}, nil)
+	f.channels.EXPECT().GetChannels(gomock.Any(), gomock.Any()).Return([]channelmodels.Channel{{ChannelID: channelID, GroupID: groupID, BoardPinLast: true}}, nil)
 	f.boards.EXPECT().GetBoards(gomock.Any(), gomock.Any()).Return([]models.Board{{ChannelID: channelID, MessageID: 77, Body: "Открытых MR команды нет.", Format: models.BoardFormatRich}}, nil)
 	f.telegram.EXPECT().PinnedMessageID(gomock.Any(), groupID).Return(int64(12), nil)
+	f.telegram.EXPECT().UnpinBoard(gomock.Any(), groupID, int64(77)).Return(nil)
 	f.telegram.EXPECT().PinBoard(gomock.Any(), groupID, int64(77)).Return(nil)
 	if err := f.uc.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEnsurePinModesAndRecovery(t *testing.T) {
+	ctx := context.Background()
+	board := models.Board{ChannelID: channelID, MessageID: 77, Body: teamBody(), Format: models.BoardFormatRich}
+	channel := channelmodels.Channel{ChannelID: channelID, GroupID: groupID}
+	f := newBoardFixture(t)
+	// A foreign pin does not trigger promotion while disabled.
+	f.telegram.EXPECT().PinnedMessageID(gomock.Any(), groupID).Return(int64(12), nil)
+	if err := f.uc.ensurePin(ctx, channel, board, now); err != nil {
+		t.Fatal(err)
+	}
+	channel.BoardPinLast = true
+	// A failed unpin is retried, without creating a duplicate board.
+	f.telegram.EXPECT().PinnedMessageID(gomock.Any(), groupID).Return(int64(12), nil)
+	f.telegram.EXPECT().UnpinBoard(gomock.Any(), groupID, int64(77)).Return(channelmodels.ErrTelegramRejected)
+	if err := f.uc.ensurePin(ctx, channel, board, now); !errors.Is(err, channelmodels.ErrTelegramRejected) {
+		t.Fatalf("error = %v", err)
+	}
+	gomock.InOrder(
+		f.telegram.EXPECT().PinnedMessageID(gomock.Any(), groupID).Return(int64(12), nil),
+		f.telegram.EXPECT().UnpinBoard(gomock.Any(), groupID, int64(77)).Return(nil),
+		f.telegram.EXPECT().PinBoard(gomock.Any(), groupID, int64(77)).Return(nil),
+	)
+	if err := f.uc.ensurePin(ctx, channel, board, now); err != nil {
+		t.Fatal(err)
+	}
+	f.telegram.EXPECT().PinnedMessageID(gomock.Any(), groupID).Return(int64(77), nil)
+	if err := f.uc.ensurePin(ctx, channel, board, now); err != nil {
 		t.Fatal(err)
 	}
 }

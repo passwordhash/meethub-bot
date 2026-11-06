@@ -46,6 +46,7 @@ const (
 	actionParticipantAdd    = "prta"
 	actionParticipantRemove = "prtd"
 	actionBoardView         = "view"
+	actionBoardPinLast      = "pinlast"
 	staleButtonResponse     = "Эта кнопка устарела. Откройте /start."
 )
 
@@ -64,6 +65,7 @@ var callbackArgumentCounts = map[string]int{
 	actionParticipantAdd:    0,
 	actionParticipantRemove: 1,
 	actionBoardView:         0,
+	actionBoardPinLast:      1,
 }
 
 var weekdaysFromMonday = []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday, time.Saturday, time.Sunday}
@@ -126,7 +128,12 @@ func (u *ChannelUseCase) sendChannelScreen(ctx context.Context, chatID, channelI
 		if u.manualParticipants {
 			keyboard = append(keyboard, []models.InlineButton{{Text: "🧑‍💻 Участники MR", CallbackData: callbackData(actionParticipants, channelID)}})
 		}
+		pinText, pinTarget := "выкл.", "on"
+		if schedule.BoardPinLast {
+			pinText, pinTarget = "вкл.", "off"
+		}
 		keyboard = append(keyboard,
+			[]models.InlineButton{{Text: "Доска MR — последний закреп: " + pinText, CallbackData: callbackData(actionBoardPinLast, channelID, pinTarget)}},
 			[]models.InlineButton{{Text: "🎲 Доска: " + schedule.BoardView.Label(), CallbackData: callbackData(actionBoardView, channelID)}},
 		)
 	}
@@ -158,7 +165,7 @@ func (u *ChannelUseCase) handleCallback(ctx context.Context, update models.Updat
 	action, arguments := parts[1], parts[3:]
 	argumentCount, known := callbackArgumentCounts[action]
 	// Manual mapping is dormant; reject callbacks from old keyboards too.
-	if (strings.HasPrefix(action, actionParticipants) && (!u.mrBoard || !u.manualParticipants)) || (action == actionBoardView && !u.mrBoard) {
+	if (strings.HasPrefix(action, actionParticipants) && (!u.mrBoard || !u.manualParticipants)) || ((action == actionBoardView || action == actionBoardPinLast) && !u.mrBoard) {
 		known = false
 	}
 	channelID, err := strconv.ParseInt(parts[2], 10, 64)
@@ -200,6 +207,14 @@ func (u *ChannelUseCase) handleCallback(ctx context.Context, update models.Updat
 		return u.removeParticipant(ctx, chatID, channelID, arguments[0])
 	case actionBoardView:
 		return u.cycleBoardView(ctx, chatID, channelID)
+	case actionBoardPinLast:
+		if arguments[0] != "on" && arguments[0] != "off" {
+			return u.telegram.Send(ctx, chatID, staleButtonResponse)
+		}
+		if err := u.repository.SetBoardPinLast(ctx, channelID, arguments[0] == "on"); err != nil {
+			return u.failChannelAction(ctx, chatID, channelID, err, "Не удалось сохранить настройку закрепа.")
+		}
+		return u.sendChannelScreen(ctx, chatID, channelID, "")
 	}
 	return u.telegram.Send(ctx, chatID, staleButtonResponse)
 }

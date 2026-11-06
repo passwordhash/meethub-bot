@@ -38,20 +38,23 @@ func NewBoardUseCase(gitlab gitLabClient, channels channelRepository, boards boa
 func (u *BoardUseCase) Run(ctx context.Context) error {
 	ticker := time.NewTicker(u.interval)
 	defer ticker.Stop()
-	warned := false
+	pins := time.NewTicker(90 * time.Second)
+	defer pins.Stop()
+	if err := u.Tick(ctx); err != nil && ctx.Err() == nil {
+		slog.Warn("MR board update failed; retrying", "error", err)
+	}
 	for {
-		if err := u.Tick(ctx); err != nil && ctx.Err() == nil {
-			if !warned {
-				slog.Warn("MR board update failed; retrying", "error", err)
-				warned = true
-			}
-		} else {
-			warned = false
-		}
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
+			if err := u.Tick(ctx); err != nil && ctx.Err() == nil {
+				slog.Warn("MR board update failed; retrying", "error", err)
+			}
+		case <-pins.C:
+			if err := u.maintainPins(ctx); err != nil && ctx.Err() == nil {
+				slog.Warn("MR board pin maintenance failed; retrying", "error", err)
+			}
 		}
 	}
 }
@@ -130,12 +133,46 @@ func (u *BoardUseCase) sync(ctx context.Context, channel channelmodels.Channel, 
 			return err
 		}
 	}
+	return u.ensurePin(ctx, channel, board, now)
+}
+
+// maintainPins does not depend on GitLab being available or on the board body changing.
+func (u *BoardUseCase) maintainPins(ctx context.Context) error {
+	channels, err := u.channels.GetChannels(ctx, channelmodels.GetChannelsFilters{})
+	if err != nil {
+		return err
+	}
+	boards, err := u.boards.GetBoards(ctx, models.GetBoardsFilters{})
+	if err != nil {
+		return err
+	}
+	byChannel := make(map[int64]models.Board, len(boards))
+	for _, board := range boards {
+		byChannel[board.ChannelID] = board
+	}
+	var failed error
+	for _, channel := range channels {
+		if board, ok := byChannel[channel.ChannelID]; ok && channel.BoardPinLast && board.Format == models.BoardFormatRich {
+			failed = errors.Join(failed, u.ensurePin(ctx, channel, board, u.now()))
+		}
+	}
+	return failed
+}
+
+func (u *BoardUseCase) ensurePin(ctx context.Context, channel channelmodels.Channel, board models.Board, now time.Time) error {
 	pinned, err := u.telegram.PinnedMessageID(ctx, channel.GroupID)
 	if err != nil {
 		return fmt.Errorf("get pinned message: %w", err)
 	}
-	if pinned == board.MessageID {
+	if pinned == board.MessageID || (!channel.BoardPinLast && pinned != 0) {
 		return nil
+	}
+	// Telegram can leave an already pinned message in its old position when pinning it again.
+	// Unpin only the board, never the other messages, before putting it back.
+	if channel.BoardPinLast && pinned != 0 {
+		if err := u.telegram.UnpinBoard(ctx, channel.GroupID, board.MessageID); err != nil {
+			return fmt.Errorf("unpin MR board: %w", err)
+		}
 	}
 	err = u.telegram.PinBoard(ctx, channel.GroupID, board.MessageID)
 	if errors.Is(err, channelmodels.ErrBoardMessageMissing) {

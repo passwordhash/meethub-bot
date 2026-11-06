@@ -16,9 +16,10 @@ var ErrBoardMessageMissing = errors.New("telegram board message is missing")
 var ErrInvalidUserID = errors.New("invalid user id")
 
 type Channel struct {
-	ChannelID int64
-	GroupID   int64
-	BoardView BoardView
+	ChannelID    int64
+	GroupID      int64
+	BoardView    BoardView
+	BoardPinLast bool
 }
 
 type GetChannelsFilters struct {
@@ -34,6 +35,7 @@ type Schedule struct {
 	ResetPending      bool
 	CheckedAt         *time.Time
 	BoardView         BoardView
+	BoardPinLast      bool
 }
 
 // BoardView picks how the MR board groups its rows.

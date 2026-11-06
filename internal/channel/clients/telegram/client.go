@@ -331,6 +331,12 @@ func (c *Client) call(ctx context.Context, method string, input, output any) err
 		return errors.Join(ErrAPI, ErrTelegramRejected, ErrMessageNotModified)
 	}
 	if response.StatusCode >= 400 && response.StatusCode < 500 && !result.OK {
+		// An unpinned (or deleted) board may already have been removed from the pin list.
+		// Let the subsequent pin distinguish a missing message from an unpinned one.
+		if response.StatusCode == http.StatusBadRequest && method == "unpinChatMessage" &&
+			(strings.Contains(result.Description, "message to unpin not found") || strings.Contains(result.Description, "message is not pinned")) {
+			return nil
+		}
 		if response.StatusCode == http.StatusBadRequest &&
 			((method == "editMessageText" && strings.Contains(result.Description, "message to edit not found")) ||
 				(method == "pinChatMessage" && strings.Contains(result.Description, "message to pin not found"))) {

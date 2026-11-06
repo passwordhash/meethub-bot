@@ -7,7 +7,7 @@ import (
 )
 
 func entityToModel(entity channelEntity) models.Channel {
-	return models.Channel{ChannelID: entity.ChannelID, GroupID: entity.GroupID, BoardView: models.BoardView(entity.BoardView)}
+	return models.Channel{ChannelID: entity.ChannelID, GroupID: entity.GroupID, BoardView: models.BoardView(entity.BoardView), BoardPinLast: entity.BoardPinLast}
 }
 
 func scheduleEntitiesToModels(entities []scheduleEntity, dailyTimes []dailyTimeEntity) []models.Schedule {
@@ -23,6 +23,7 @@ func scheduleEntitiesToModels(entities []scheduleEntity, dailyTimes []dailyTimeE
 			ResetPending:      entity.ResetPending,
 			CheckedAt:         entity.CheckedAt,
 			BoardView:         models.BoardView(entity.BoardView),
+			BoardPinLast:      entity.BoardPinLast,
 		})
 	}
 	for _, entity := range dailyTimes {

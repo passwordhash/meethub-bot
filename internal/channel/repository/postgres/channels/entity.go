@@ -3,9 +3,10 @@ package channels
 import "time"
 
 type channelEntity struct {
-	ChannelID int64 `db:"channel_id"`
-	GroupID   int64 `db:"linked_chat_id"`
-	BoardView int16 `db:"board_view"`
+	ChannelID    int64 `db:"channel_id"`
+	GroupID      int64 `db:"linked_chat_id"`
+	BoardView    int16 `db:"board_view"`
+	BoardPinLast bool  `db:"board_pin_last"`
 }
 
 type scheduleEntity struct {
@@ -15,6 +16,7 @@ type scheduleEntity struct {
 	ResetPending      bool       `db:"schedule_reset_pending"`
 	CheckedAt         *time.Time `db:"schedule_checked_at"`
 	BoardView         int16      `db:"board_view"`
+	BoardPinLast      bool       `db:"board_pin_last"`
 }
 
 type dailyTimeEntity struct {

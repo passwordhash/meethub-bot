@@ -27,12 +27,12 @@ func getChannelsQuery(filters models.GetChannelsFilters) (string, pgx.NamedArgs)
 		conditions = append(conditions, "linked_chat_id = @group_id")
 		args["group_id"] = *filters.GroupID
 	}
-	return "-- getChannels\nSELECT channel_id, linked_chat_id, board_view FROM channels WHERE " + strings.Join(conditions, " AND "), args
+	return "-- getChannels\nSELECT channel_id, linked_chat_id, board_view, board_pin_last FROM channels WHERE " + strings.Join(conditions, " AND "), args
 }
 
 func getSchedulesQuery(filters models.GetSchedulesFilters) (string, pgx.NamedArgs) {
 	query := `-- getSchedulesQuery
-SELECT channel_id, post_offset_minutes, daily_lead_enabled, schedule_reset_pending, schedule_checked_at, board_view
+SELECT channel_id, post_offset_minutes, daily_lead_enabled, schedule_reset_pending, schedule_checked_at, board_view, board_pin_last
 FROM channels`
 	args := pgx.NamedArgs{}
 	if filters.ChannelID != nil {
@@ -89,6 +89,11 @@ func setBoardViewQuery(channelID int64, view models.BoardView) (string, pgx.Name
 	return `-- setBoardViewQuery
 UPDATE channels SET board_view = @view::SMALLINT WHERE channel_id = @channel_id
 RETURNING channel_id`, pgx.NamedArgs{"channel_id": channelID, "view": int16(view)}
+}
+
+func setBoardPinLastQuery(channelID int64, enabled bool) (string, pgx.NamedArgs) {
+	return `UPDATE channels SET board_pin_last = @enabled WHERE channel_id = @channel_id
+RETURNING channel_id`, pgx.NamedArgs{"channel_id": channelID, "enabled": enabled}
 }
 
 func clearScheduleResetQuery(channelID int64) (string, pgx.NamedArgs) {

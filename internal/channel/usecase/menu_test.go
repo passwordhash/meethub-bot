@@ -422,6 +422,26 @@ func TestBoardViewCycles(t *testing.T) {
 	}
 }
 
+func TestBoardPinLastToggle(t *testing.T) {
+	f := newMenuFixture(t)
+	f.uc.EnableMRBoard()
+	for _, tc := range []struct {
+		target  string
+		enabled bool
+		label   string
+	}{
+		{"on", true, "Доска MR — последний закреп: вкл."},
+		{"off", false, "Доска MR — последний закреп: выкл."},
+	} {
+		f.repository.EXPECT().SetBoardPinLast(gomock.Any(), testChannelID, tc.enabled).Return(nil)
+		f.expectSchedule(models.Schedule{ChannelID: testChannelID, BoardPinLast: tc.enabled})
+		f.callback("ui:pinlast:-1001234567890:" + tc.target)
+		if got := f.lastKeyboard(); got[len(got)-3][0].Text != tc.label {
+			t.Fatalf("pin button = %+v", got[len(got)-3])
+		}
+	}
+}
+
 func TestBoardViewDisabledWithoutGitLab(t *testing.T) {
 	f := newMenuFixture(t)
 	f.telegram.EXPECT().Send(gomock.Any(), int64(1), staleButtonResponse).Return(nil)
